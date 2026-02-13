@@ -235,18 +235,18 @@ which fits well with managing ACP subprocesses via `asyncio`.
 ## Architecture
 
 ```
-┌──────────┐         ┌──────────────────┐         ┌──────────────┐
-│ Telegram  │  HTTP   │  Python Bot      │  stdin  │  kiro-cli    │
-│ User Chat │◄──────►│  (aiogram)       │◄──────►│  acp          │
-│           │         │                  │  stdout │              │
-└──────────┘         └──────────────────┘         └──────────────┘
-                      │                  │
-                      │ sendMessageDraft │
-                      │ (streaming)      │
-                      │                  │
-                      │ sendMessage      │
-                      │ (final)          │
-                      └──────────────────┘
++----------+         +------------------+         +--------------+
+| Telegram |  HTTP   |  Python Bot      |  stdin  |  kiro-cli    |
+| User Chat|<------->|  (aiogram)       |<------->|  acp         |
+|          |         |                  |  stdout |              |
++----------+         +------------------+         +--------------+
+                     |                  |
+                     | sendMessageDraft |
+                     | (streaming)      |
+                     |                  |
+                     | sendMessage      |
+                     | (final)          |
+                     +------------------+
 ```
 
 ### Flow
@@ -281,7 +281,7 @@ which fits well with managing ACP subprocesses via `asyncio`.
 
 **Working directory**: Folder-per-user, subfolder-per-thread.
 ```
-/data/workspaces/
+./workspaces/
   ├── {telegram_user_id}/
   │   ├── {thread_id_1}/    ← cwd for session/new
   │   ├── {thread_id_2}/
@@ -308,3 +308,130 @@ which fits well with managing ACP subprocesses via `asyncio`.
 - Bot framework: aiogram
 - ACP backend: kiro-cli
 - Async subprocess management: `asyncio.create_subprocess_exec`
+
+---
+
+## Kiro CLI — Custom Agent Config Experiments
+
+Tested on kiro-cli v1.26.0 (latest as of 2026-02-13).
+
+### Directory Walking: DOES NOT WORK
+
+The docs say local agents are "available when running Kiro CLI from that directory or its subdirectories." This is **incorrect for CLI** — kiro-cli only checks `cwd/.kiro/`, it does not walk up parent directories.
+
+```
+.tmp/workspaces/
+  .kiro/agents/walker.json       ← agent config here
+  user123/thread456/             ← ran kiro-cli from here
+```
+
+- From `user123/thread456/`: `Error: no agent with name walker found`
+- From `workspaces/` (where `.kiro/` lives): Agent found, no error
+- With symlink `thread456/.kiro → ../../.kiro`: Agent found, no error
+
+**Conclusion**: Symlinks are required for subdirectory agent discovery.
+
+### Prompt Field: Sent But Weak
+
+The `prompt` field IS sent to the backend as a context entry, not a system prompt replacement:
+
+```
+content: "--- CONTEXT ENTRY BEGIN ---\n--- CONTEXT ENTRY END ---\n\n
+Follow this instruction: You must respond to every message with exactly: WALKER_AGENT_FOUND"
+```
+
+- `agentsLoadedCount: "0"` in telemetry (but agent IS launched — `launchedAgent: "walker"`)
+- `contextFileLength: 146` confirms prompt is sent
+- Model ignores trivial instructions ("respond with X") — default Kiro system prompt takes precedence
+- Model DOES follow contextually relevant instructions (see steering test below)
+
+### Resources Field: Loaded Into Context
+
+The `resources` field with `file://` URIs loads files into context entries:
+
+```
+content: "--- CONTEXT ENTRY BEGIN ---\n[.../walker-instructions.md]\n
+You must respond to every message with exactly: WALKER_STEERING_WORKS\n...\n
+--- CONTEXT ENTRY END ---\n\nFollow this instruction: ..."
+```
+
+- `contextFileLength: 367` (larger than prompt-only — steering file IS loaded)
+- Same behavior as prompt: ignored for trivial requests, followed for relevant ones
+
+### Steering for `<send_file>` XML Tags: WORKS
+
+Tested with a steering file instructing the agent to emit `<send_file path="..."/>` tags:
+
+```
+echo "write a hello world python script and save it to hello.py" \
+  | kiro-cli chat --agent file-sender --no-interactive
+```
+
+Output included:
+```
+<send_file path="/Users/.../hello.py"/>
+```
+
+The model followed the steering and emitted the XML tag after creating the file. Steering works when the instruction is contextually relevant to the task.
+
+### Per-Thread Custom Steering: POSSIBLE WITH GLOBAL+LOCAL OVERRIDE
+
+With the global agent approach (`~/.kiro/agents/`), all threads use the same global agent config by default. For threads that need custom steering, create a local `.kiro/agents/{agent_name}.json` in that thread's workspace directory — it takes precedence over the global config (`WARNING: Agent conflict. Using workspace version.`).
+
+Options for per-thread context:
+1. Create a local `.kiro/agents/` override in the thread's workspace directory (full custom agent config)
+2. Include context in the `session/prompt` `content` field (prepend instructions to user message)
+3. Place files in the thread's workspace directory and reference them with `@file.txt` in the prompt
+
+### Summary Table
+
+| Feature | Works? | Notes |
+|---------|--------|-------|
+| Agent discovery from `cwd/.kiro/` | ✅ | Only exact `cwd`, no parent walking |
+| Agent discovery via symlink | ✅ | Symlink to shared `.kiro/` works |
+| Agent discovery walking up dirs | ❌ | Docs say yes, CLI says no (v1.26.0) |
+| `prompt` field (inline) | ✅ | Sent as context entry, followed when relevant |
+| `prompt` field (`file://`) | ✅ | Same behavior as inline |
+| `resources` with `file://` | ✅ | Steering files loaded into context |
+| `resources` with `skill://` | ❓ | Not tested |
+| `tools` / `allowedTools` | ✅ | Agent used write tool without prompting |
+| `model` field | ✅ | Model selection works |
+| `welcomeMessage` | ✅ | Displayed on agent switch |
+| Per-thread custom steering | ✅ | Global+local override: create `.kiro/` in thread dir when needed |
+
+
+### Global Agent + Local Override: THE WINNING APPROACH
+
+Instead of symlinks, use `~/.kiro/agents/` for the default agent (global, always available from any cwd), and create a real `.kiro/` in specific thread directories only when custom steering is needed.
+
+```
+~/.kiro/agents/tg-bot.json              ← global default, always found
+./workspaces/user123/thread456/         ← no .kiro/ needed, uses global
+./workspaces/user123/thread789/.kiro/   ← local override when needed
+  agents/tg-bot.json                    ← takes precedence with warning
+```
+
+**Full test results:**
+
+| Test | Result |
+|------|--------|
+| Global agent from bare thread dir (no local `.kiro/`) | ✅ Agent found, `<send_file>` works |
+| `prompt` field carries steering instructions | ✅ Model follows when contextually relevant |
+| `resources` with relative path (`file://.kiro/steering/**/*.md`) from global agent | ❌ Resolves relative to `cwd`, not agent config dir — finds nothing |
+| `resources` with absolute path (`file:///Users/.../steering/**/*.md`) | ✅ Steering file loaded into context |
+| Local `.kiro/` override in thread dir | ✅ `WARNING: Agent conflict. Using workspace version.` — local wins |
+| No symlinks needed | ✅ |
+
+**Key finding on `resources` path resolution:**
+The docs say `file://` paths in `prompt` resolve relative to the agent config file's directory. But `resources` paths appear to resolve relative to `cwd`, not the agent config location. For global agents in `~/.kiro/agents/`, use absolute paths in `resources` or put steering instructions directly in the `prompt` field.
+
+**Benefits:**
+- No symlinks at all
+- Global agent works from any directory without setup
+- Per-thread customization by creating `.kiro/` only where needed
+- Clean separation: bot provisions `~/.kiro/agents/` once at startup, threads are clean by default
+- Steering via `prompt` field is simplest and most reliable
+
+**Trade-off:**
+- Uses `~/.kiro/` (user-level) instead of workspace-level — affects all kiro-cli sessions on the machine, not just the bot
+- Acceptable for PoC / single-purpose deployment; for multi-tenant production, would need isolation

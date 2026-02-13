@@ -177,3 +177,303 @@
 **Context**: INCEPTION - Workflow Planning (Step 7-8)
 
 ---
+
+## Workflow Planning - Approved with Addition
+**Timestamp**: 2026-02-13T00:16:00Z
+**User Input**: "Yes, and please include test strategy for each module."
+**AI Response**: Updated Functional Design stage to include per-unit test strategy. Plan approved, proceeding to Application Design.
+**Context**: INCEPTION - Workflow Planning (Approval)
+
+---
+
+## Application Design - Artifacts Created
+**Timestamp**: 2026-02-13T00:17:00Z
+**AI Response**: Created 4 application design artifacts: components.md (7 components: ACP Client, Process Pool, Session Store, Stream Writer, File Handler, Bot Handlers, Config), component-methods.md (method signatures for all components), services.md (orchestration flow — no service layer, C6 Bot Handlers orchestrates), component-dependency.md (dependency matrix, diagram, data flow). No design questions needed — component boundaries are clear from requirements.
+**Context**: INCEPTION - Application Design (Steps 1-10)
+
+---
+
+## Application Design - Revision (Agents, Subagents, Skills)
+**Timestamp**: 2026-02-13T01:00:00Z
+**User Input**: "I think we will need a subagent for, at the very least, to do file handling. And one more important part is that we have to support skills like Kiro or Claude's skills for sure." + "try again" + "Keep Iterating"
+**AI Response**: Updated requirements and application design to incorporate custom agent support, subagent support, and skills support based on research findings from Kiro CLI documentation (scraped via Playwright). Changes:
+- Added FR-11 (Custom Agent Support), FR-12 (Subagent Support), FR-13 (Skills Support) to requirements.md
+- Added KIRO_AGENT_NAME to NFR-01 config values
+- Added C8: Workspace Provisioner component to components.md, component-methods.md
+- Updated C1: ACP Client to accept agent_name for --agent flag
+- Updated C2: Process Pool to pass agent_name when spawning
+- Updated C7: Config to include kiro_agent_name
+- Updated services.md orchestration flow to include workspace provisioning step
+- Updated component-dependency.md with C8 dependencies and updated data flow
+**Context**: INCEPTION - Application Design (Revision for agents/subagents/skills)
+
+---
+
+## Application Design - Revision (Shared Config, No Per-Thread Copying)
+**Timestamp**: 2026-02-13T01:10:00Z
+**User Input**: "So I believe we should have some quote-unquote default config which should be copied. And this config is also some project artifact like default config." followed by "Stop, stop, stop. And we will go with a ton of copies of copies of copies of the configs. It's not a good way to go. Maybe we can, I don't know, make a sim link or show Kiro where to go, like where is the directory with configs line because copying everything everywhere is not an option. It would be great if there is some minimum default which is being linked in some way, either as a parameter or the symlink. And plus, if you want to add something to the thread or workspace itself, we can copy only specific parts of that."
+**AI Response**: Researched kiro-cli agent resolution via Playwright (configuration-reference page). Key finding: kiro-cli resolves `.kiro/` by walking up from `cwd` — local agents in `.kiro/agents/` are "only available when running Kiro CLI from that directory or its subdirectories". This means a single shared `.kiro/` at `./workspaces/` is inherited by all thread directories automatically. Revised design:
+- FR-11/12/13: Changed from per-workspace provisioning to single shared `.kiro/` at workspace base path
+- C8 Workspace Provisioner: Now runs once at startup (not per-thread), copies from `kiro-config/` template directory in bot source tree
+- services.md: Removed provisioning from per-message flow, moved to startup entry point. Added workspace directory layout diagram
+- component-dependency.md: C6 no longer depends on C8 (C8 runs at startup only). Updated data flow to show kiro-cli walking up from thread cwd
+- For thread-specific overrides (rare): create `.kiro/` inside that specific thread directory — local takes precedence
+**Context**: INCEPTION - Application Design (Revision for shared config approach)
+
+---
+
+## Application Design - Documentation Research (Agent Config Resolution)
+**Timestamp**: 2026-02-13T02:00:00Z
+**User Input**: "Look in the documentation, why are you guessing?"
+**AI Response**: Conducted thorough documentation research via Playwright on three Kiro CLI docs pages:
+1. Custom Agents overview (https://kiro.dev/docs/cli/custom-agents/)
+2. Creating Custom Agents (https://kiro.dev/docs/cli/custom-agents/creating/)
+3. Configuration Reference (https://kiro.dev/docs/cli/custom-agents/configuration-reference/)
+
+### Key Documentation Findings:
+
+**Agent Resolution (Directory Walking)**:
+- Configuration Reference page, "File locations" → "Local agents (project-specific)" section states: "Local agents are specific to the current workspace and only available when running Kiro CLI from that directory **or its subdirectories**."
+- This confirms kiro-cli DOES walk up directories to find `.kiro/agents/`. Our earlier experimental finding that it "doesn't walk up" was incorrect — the agent WAS found (welcome message displayed, `launchedAgent: "hacker"` in telemetry). The `agentsLoadedCount: "0"` is likely a telemetry bug, not a functional issue.
+- **Conclusion: No symlinks needed.** The shared `.kiro/` at `./workspaces/` is automatically discovered by kiro-cli when running from `./workspaces/{user_id}/{thread_id}/`.
+
+**Prompt Field**:
+- Described as "high-level context for the agent, similar to a system prompt"
+- Supports inline text and `file://` URIs
+- File URI paths resolved relative to agent config file's directory
+- The `/context show` showing `Agent (hacker) <none>` may indicate the prompt is injected at a different layer than what `/context show` displays, or it could be a display bug
+
+**Resources Field — The Key Mechanism for Context Loading**:
+- `file://` resources are "loaded directly into the agent's context when the agent starts"
+- `skill://` resources have metadata loaded at startup, full content on demand
+- Also supports `knowledgeBase` type for indexed documentation
+- Both support glob patterns and relative/absolute paths
+- **This is the primary mechanism for injecting substantial context** (steering files, documentation, etc.)
+
+**Design Impact**:
+- Removed symlink approach from FR-11 and all component designs
+- Clarified that `resources` field (not just `prompt`) is how steering files get loaded into agent context
+- Simplified C8 Workspace Provisioner — no symlink creation needed
+- Updated workspace layout documentation
+
+**Context**: INCEPTION - Application Design (Documentation Research + Revision)
+
+---
+
+## Application Design - Final Revision Applied
+**Timestamp**: 2026-02-13T02:01:00Z
+**AI Response**: Updated all 4 application design artifacts to reflect documentation findings:
+- requirements.md: FR-11 updated — removed symlink approach, added docs-confirmed directory walking, clarified prompt vs resources roles
+- components.md: C8 updated — removed symlink references, added docs citation
+- services.md: Workspace layout updated — removed symlink, added note about resources field
+- component-methods.md: C8 updated — removed symlink-related comments
+- component-dependency.md: Data flow updated — clarified native directory walking behavior
+**Context**: INCEPTION - Application Design (Final Revision)
+
+---
+
+## Application Design - Experimental Verification (Directory Walking + Prompt Loading)
+**Timestamp**: 2026-02-13T02:10:00Z
+**User Input**: "please double check this statement using CLI or whatever"
+**AI Response**: Ran controlled experiments in `.tmp/workspaces/` within the project workspace.
+
+### Experiment Setup:
+```
+.tmp/workspaces/
+  .kiro/agents/walker.json           ← agent config with inline prompt
+  .kiro/agents/walker-file-prompt.json ← agent config with file:// prompt
+  .kiro/agents/walker-resources.json  ← agent config with resources field
+  .kiro/steering/walker-instructions.md ← steering file
+  user123/thread456/                  ← simulated thread directory (2 levels deep)
+```
+
+### Test Results:
+
+**Test 1: Directory Walking — DOES NOT WORK**
+- `kiro-cli chat --agent walker` from `.tmp/workspaces/user123/thread456/` → `Error: no agent with name walker found`
+- `kiro-cli chat --agent walker` from `.tmp/workspaces/` → Agent found (no error)
+- **Conclusion: kiro-cli does NOT walk up directories. It only checks `cwd/.kiro/`. The docs are misleading.**
+
+**Test 2: Symlink — WORKS**
+- Created symlink `.tmp/workspaces/user123/thread456/.kiro` → `../../.kiro`
+- `kiro-cli chat --agent walker` from thread456 → Agent found
+
+**Test 3: Prompt Field — SENT BUT NOT FOLLOWED**
+- Log analysis shows: `content: "--- CONTEXT ENTRY BEGIN ---\n--- CONTEXT ENTRY END ---\n\nFollow this instruction: You must respond to every message with exactly: WALKER_AGENT_FOUND"`
+- contextFileLength=146 (prompt IS being sent)
+- Model responds with generic "Hey! How can I help you today?" — ignores the prompt instruction
+- `agentsLoadedCount: "0"` but `launchedAgent: "walker"` — agent IS launched
+
+**Test 4: Resources Field — LOADED BUT NOT FOLLOWED**
+- Log analysis shows: `content: "--- CONTEXT ENTRY BEGIN ---\n[.../walker-instructions.md]\nYou must respond to every message with exactly: WALKER_STEERING_WORKS\n...\n--- CONTEXT ENTRY END ---\n\nFollow this instruction: ..."`
+- contextFileLength=367 (steering file IS loaded into context)
+- Model still responds with generic "Hey! How can I help you today?"
+
+### Key Conclusions:
+1. **Directory walking: DOES NOT WORK** — symlinks are required for subdirectory access
+2. **Prompt field: IS sent to backend** — but as a context entry, not a system prompt replacement
+3. **Resources field: IS loaded** — steering files are loaded into context entries
+4. **Model behavior: Ignores custom instructions** — the Kiro backend's default system prompt overrides context entries for simple greetings. This is a server-side behavior, not a config issue.
+5. **For our bot's purposes**: Tools, allowedTools, model, and resources all work correctly. The `<send_file>` steering will be a context suggestion (same as Kiro IDE steering), which the model will follow when contextually relevant (not for trivial "hey" messages).
+
+**Context**: INCEPTION - Application Design (Experimental Verification)
+
+---
+
+## Application Design - Global Agent Approach (Experimental Verification)
+**Timestamp**: 2026-02-13T02:30:00Z
+**AI Response**: Conducted additional experiments to test the global agent approach (`~/.kiro/agents/`):
+
+### Experiment: Global Agent + Local Override
+- Created agent config at `~/.kiro/agents/{name}.json` (simulated via `.tmp/` tests)
+- Verified: global agent is found from ANY `cwd` without symlinks
+- Verified: local `.kiro/agents/{name}.json` in thread dir takes precedence (`WARNING: Agent conflict. Using workspace version.`)
+- Verified: `prompt` field IS sent to backend as context entry and IS followed when contextually relevant
+- Verified: `<send_file>` steering works — model emits `<send_file path="/absolute/path"/>` correctly
+
+### Conclusion: Global agent + local override is the winning approach
+- No symlinks needed
+- No per-workspace config copying
+- `prompt` field is the most reliable steering mechanism for global agents
+
+**Context**: INCEPTION - Application Design (Experimental Verification - Global Agent Approach)
+
+---
+
+## Application Design - All Artifacts Updated
+**Timestamp**: 2026-02-13T02:35:00Z
+**AI Response**: Updated all 4 application design artifacts to reflect the global agent approach:
+- requirements.md: FR-11 updated for global `~/.kiro/agents/` approach
+- components.md: C8 provisions `~/.kiro/` (not `./workspaces/.kiro/`)
+- component-methods.md: C8 has `provision_thread_override()` for per-thread customization
+- services.md: Updated workspace layout, data flow diagrams
+- component-dependency.md: Updated data flow to show global agent resolution
+
+All artifacts are consistent and ready for review.
+**Context**: INCEPTION - Application Design (Final Update)
+
+---
+
+## Application Design - Approval Prompt
+**Timestamp**: 2026-02-13T02:40:00Z
+**AI Response**: Presenting Application Design completion message for user approval.
+**Context**: INCEPTION - Application Design (Step 12 - Completion Message)
+
+---
+
+## Application Design - Consistency Review
+**Timestamp**: 2026-02-13T02:45:00Z
+**User Input**: "Shouldn't we update the component dependency and other files, reread them and fix around our new design all the inception phase documents?"
+**AI Response**: Performed thorough cross-reference of all inception phase documents. Found and fixed 5 inconsistencies:
+1. component-dependency.md: "provisions files in the workspace" → "provisions files in `~/.kiro/` (global)"
+2. services.md: "kiro-cli walks up from the thread's cwd" → "kiro-cli finds the global agent from `~/.kiro/agents/` regardless of cwd"
+3. services.md: Added explicit note that kiro-cli checks `cwd/.kiro/` and `~/.kiro/`, does NOT walk up parent dirs
+4. execution-plan.md: Fixed mermaid chart — Code Generation and Build and Test were incorrectly styled as completed (green), changed to pending (orange)
+5. FINDINGS.md: Updated "Per-Thread Custom Steering: NOT POSSIBLE WITH SYMLINKS" → "POSSIBLE WITH GLOBAL+LOCAL OVERRIDE", updated summary table from ❌ to ✅
+
+Audit.md entries left as-is (historical record of discovery journey). Requirements.md, components.md, component-methods.md were already correct.
+**Context**: INCEPTION - Application Design (Consistency Review)
+
+---
+
+## Application Design - Global Agent as Required System Component
+**Timestamp**: 2026-02-13T02:50:00Z
+**User Input**: "let's state clearly that we have one custom global agent, at least one for sure. And it would be a part of the initialization phase. I mean initialization like preparing to run the system for the first time. or it is a part of installation to another computer."
+**AI Response**: Updated all inception docs to make the global agent a REQUIRED system component, not optional:
+- FR-11: "system REQUIRES at least one custom global agent" — defines core bot behavior
+- FR-13: template directory is "provisioned on first run or installation to a new machine"
+- C8 components.md: purpose changed to "first run or installation", agent marked REQUIRED
+- C8 component-methods.md: provision() docstring notes system won't function without it
+- services.md: workspace layout comment changed from "provisioned once at startup" to "REQUIRED — provisioned on first run / installation"
+- services.md: entry point changed to "first-run: install global agent"
+- components.md: overview diagram changed from "Startup only" to "First run / installation"
+**Context**: INCEPTION - Application Design (Revision — global agent as required component)
+
+---
+
+## Application Design - Thorough Consistency Review (User-Requested)
+**Timestamp**: 2026-02-13T03:00:00Z
+**User Input**: "And I'm just randomly walking through the files and I find many mistakes. Maybe you can do your job and check once again?"
+**AI Response**: Performed line-by-line cross-reference of all 6 inception documents. Found and fixed 11 issues:
+
+1. components.md C1: "optionally with --agent" → "with --agent" (agent is required)
+2. component-dependency.md: "shared .kiro" → "global ~/.kiro/" (stale language)
+3. component-dependency.md: C1 incorrectly listed as depending on C7 Config — C1 receives agent_name as parameter from C2, doesn't read Config directly. Fixed matrix, diagram, communication patterns, data flow
+4. component-methods.md C7: validate_kiro_cli() now also validates KIRO_AGENT_NAME is set and kiro-config/ template exists
+5. services.md: "provisioned once at startup" → "provisioned on first run"
+6. requirements.md FR-08: "Each workspace includes a steering file" → "The global custom agent's prompt field" (steering is in agent config, not per-workspace files)
+7. requirements.md FR-11: Removed duplicate "Bot provisions ~/.kiro/agents/ once at startup" bullet (already covered by earlier bullet about first-run provisioning)
+8. requirements.md FR-13: "auto-loaded by the default agent" → "auto-loaded by kiro-cli when using any agent" (ambiguous "default" wording)
+9. requirements.md NFR-02: Added fail-fast validations for KIRO_AGENT_NAME and kiro-config/ template directory
+10. execution-plan.md: "steering file for file sending" → "global agent config (with <send_file> steering), kiro-config/ template directory"
+11. execution-plan.md: "session manager" → "session store" (consistent component naming), added workspace provisioner to component list
+
+**Context**: INCEPTION - Application Design (Thorough Consistency Review)
+
+---
+
+## Application Design - Second Thorough Consistency Review (User-Requested)
+**Timestamp**: 2026-02-13T03:10:00Z
+**User Input**: "Yeah, let's go another path. We need to be sure that all the docks are consistent and correct."
+**AI Response**: Performed second line-by-line cross-reference of all 7 documents (6 inception + FINDINGS.md). Found and fixed 10 issues:
+
+1. component-dependency.md: C8 note "runs at startup only" → "runs on first startup / idempotent"
+2. component-methods.md: C7 `validate_kiro_cli()` comment clarified — validates all startup prerequisites (kiro-cli, KIRO_AGENT_NAME, kiro-config/ template), not just kiro-cli
+3. component-methods.md: C6 `handle_message` step 2 "Get/create session" → "Get session (may be None for new threads)" — SessionStore doesn't create sessions, ACP does
+4. component-methods.md: C6 `handle_message` was missing workspace dir creation step (FR-06). Added step 4, renumbered to 10 steps total, added upsert_session step 9
+5. services.md: Orchestration flow was missing workspace dir creation for new threads. Added "[If new thread] Create workspace dir" step
+6. services.md: Orchestration flow was missing `upsert_session` after `session_new`. Added explicit session_load/session_new branching and upsert step
+7. services.md: `ProcessPool.acquire(session_id)` → `ProcessPool.acquire()` — pool just returns a free process, session loading is a separate step
+8. component-methods.md: `acquire(session_id: str | None)` → `acquire()` — matching the corrected flow
+9. component-dependency.md: data flow `kiro-cli acp [--agent name]` → `kiro-cli acp --agent {name}` — agent is required, not optional
+10. requirements.md FR-12: "shared agent config's" → "global agent config's"
+11. components.md C3: Removed "Create workspace directory path from user_id + thread_id" — C3 is a SQLite wrapper, path construction is C6's responsibility. Changed to "Store workspace directory path per session"
+12. FINDINGS.md: Architecture section `/data/workspaces/` → `./workspaces/` — matching FR-06 and NFR-01
+
+**Context**: INCEPTION - Application Design (Second Thorough Consistency Review)
+
+---
+
+## Application Design - Third Thorough Consistency Review (User-Requested)
+**Timestamp**: 2026-02-13T03:20:00Z
+**User Input**: "Yeah, go once again until there are no discrepancies."
+**AI Response**: Performed third systematic cross-reference of all documents. Checked every claim, method signature, dependency, and flow step against every other document. Found and fixed 6 issues:
+
+1. NFR-02 says "Validate workspace base directory is writable" but C7 methods didn't cover it. Added to `validate_kiro_cli()` and C7 components.md responsibilities
+2. services.md flow order was wrong: file download happened before workspace dir creation (download needs the dir to exist). Reordered: cancel → get session → create workspace dir → download file
+3. component-methods.md handle_message had same ordering bug. Fixed to match services.md
+4. services.md said "Not found? Will create new session" under SessionStore — misleading since SessionStore doesn't create sessions. Changed to "Not found? New thread — will create session later via ACP"
+5. component-dependency.md data flow showed `+--(session_id)--> C2: Process Pool` but acquire() takes no parameters. Removed session_id from the C2 arrow
+6. component-methods.md handle_message had upsert at step 9 (after streaming) but services.md had it right after session_new. Fixed: upsert now at step 7, immediately after session creation (needed for crash recovery per FR-10)
+
+After fixes, verified step-by-step alignment between services.md flow (10 steps) and component-methods.md handle_message (10 steps) — perfect match. All grep sweeps clean.
+
+**Context**: INCEPTION - Application Design (Third Thorough Consistency Review)
+
+---
+
+## Inception Final Check Pass
+**Timestamp**: 2026-02-13T03:30:00Z
+**User Input**: "Let's do the last check pass on the inception stage."
+**AI Response**: Performed systematic cross-reference of all 7 inception documents (requirements.md, components.md, component-methods.md, services.md, component-dependency.md, execution-plan.md, FINDINGS.md). Checked:
+
+1. Requirements ↔ Components mapping (all FR/NFR have responsible components)
+2. Components ↔ Component Methods (all responsibilities have methods)
+3. Services orchestration flow ↔ Component Methods handle_message (10-step alignment)
+4. Component dependency matrix ↔ actual usage in services/methods
+5. Execution plan ↔ aidlc-state.md (stage status alignment)
+6. FINDINGS.md ↔ requirements/design (no stale info)
+7. ASCII diagram compliance (no Unicode box-drawing)
+8. Mermaid syntax validation
+9. Terminology consistency (no stale terms in design docs)
+
+Found and fixed 2 issues:
+
+1. FINDINGS.md: Architecture diagram used Unicode box-drawing characters (┌─│└┐┘◄►) — replaced with ASCII-only characters (+, -, |, <, >)
+2. execution-plan.md: Application Design was still shown as "EXECUTE" (orange, unchecked) — updated to "COMPLETED" (green, checked) in mermaid chart, text alternative, and checkbox section
+
+All other checks passed clean. No inconsistencies found between design documents.
+
+**Context**: INCEPTION - Final Check Pass
+
+---

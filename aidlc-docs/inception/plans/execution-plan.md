@@ -4,7 +4,7 @@
 
 ### Change Impact Assessment
 - **User-facing changes**: Yes — new Telegram bot with streaming responses, file handling, model selection
-- **Structural changes**: Yes — new system with multiple async components (bot, ACP client, process pool, session manager)
+- **Structural changes**: Yes — new system with multiple async components (bot, ACP client, process pool, session store)
 - **Data model changes**: Yes — SQLite schema for session mapping and model selection
 - **API changes**: N/A — no external APIs exposed, bot consumes Telegram Bot API and Kiro ACP
 - **NFR impact**: Yes — process pool sizing, idle timeouts, streaming performance
@@ -24,7 +24,7 @@ flowchart TD
         WD["Workspace Detection<br/>COMPLETED"]
         RA["Requirements Analysis<br/>COMPLETED"]
         WP["Workflow Planning<br/>COMPLETED"]
-        AD["Application Design<br/>EXECUTE"]
+        AD["Application Design<br/>COMPLETED"]
         UG["Units Generation<br/>EXECUTE"]
     end
     
@@ -47,11 +47,11 @@ flowchart TD
     style WD fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
     style RA fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
     style WP fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
-    style AD fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
+    style AD fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
     style UG fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
     style FD fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
-    style CG fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
-    style BT fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
+    style CG fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
+    style BT fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
     style Start fill:#CE93D8,stroke:#6A1B9A,stroke-width:3px,color:#000
     style End fill:#CE93D8,stroke:#6A1B9A,stroke-width:3px,color:#000
     style INCEPTION fill:#BBDEFB,stroke:#1565C0,stroke-width:3px,color:#000
@@ -67,7 +67,7 @@ INCEPTION PHASE:
   2. Requirements Analysis  — COMPLETED
   3. User Stories           — SKIPPED (single user type, requirements sufficient)
   4. Workflow Planning      — COMPLETED
-  5. Application Design    — EXECUTE
+  5. Application Design    — COMPLETED
   6. Units Generation      — EXECUTE
 
 CONSTRUCTION PHASE (per unit):
@@ -88,14 +88,14 @@ CONSTRUCTION PHASE (per unit):
 - [x] User Stories (SKIPPED)
   - **Rationale**: Single user type (Telegram user), requirements already capture all interactions clearly
 - [x] Workflow Planning (COMPLETED)
-- [ ] Application Design — EXECUTE
-  - **Rationale**: Multiple new components needed (ACP client, process pool, session manager, bot handlers, file handler). Component boundaries, responsibilities, and interactions need definition before coding
+- [x] Application Design (COMPLETED)
+  - **Rationale**: Multiple new components needed (ACP client, process pool, session store, bot handlers, file handler, workspace provisioner). Component boundaries, responsibilities, and interactions need definition before coding
 - [ ] Units Generation — EXECUTE
   - **Rationale**: System decomposes into distinct units that should be built and tested incrementally per the user's requirement. Units need explicit ordering to match the incremental testability approach
 
 ### CONSTRUCTION PHASE
 - [ ] Functional Design — EXECUTE (per unit)
-  - **Rationale**: Each unit has business logic that benefits from upfront design — ACP protocol state machine, process pool lifecycle, streaming accumulation, cancel semantics, file parsing
+  - **Rationale**: Each unit has business logic that benefits from upfront design — ACP protocol state machine, process pool lifecycle, streaming accumulation, cancel semantics, file parsing. Includes test strategy for the unit
 - [ ] NFR Requirements — SKIP
   - **Rationale**: NFRs already captured in requirements (NFR-01 through NFR-05). Tech stack decided. No additional NFR analysis needed
 - [ ] NFR Design — SKIP
@@ -112,5 +112,5 @@ CONSTRUCTION PHASE (per unit):
 
 ## Success Criteria
 - **Primary Goal**: Working Telegram bot that streams Kiro CLI responses in real-time via sendMessageDraft
-- **Key Deliverables**: Bot application code, SQLite session store, steering file for file sending, integration tests
+- **Key Deliverables**: Bot application code, SQLite session store, global agent config (with `<send_file>` steering), `kiro-config/` template directory, integration tests
 - **Quality Gates**: Each unit passes its integration tests before the next unit is built

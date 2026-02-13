@@ -4,7 +4,7 @@
 - **Project Name**: tg-acp (Telegram Bot + Kiro CLI ACP Streaming)
 - **Project Type**: Greenfield
 - **Start Date**: 2026-02-13T00:00:00Z
-- **Current Stage**: INCEPTION - Workflow Planning
+- **Current Stage**: INCEPTION - Application Design Complete
 
 ## Workspace State
 - **Existing Code**: No (hello.py is a placeholder scaffold)
@@ -24,7 +24,7 @@
 - [x] Requirements Analysis
 - [x] User Stories (SKIPPED - single user type)
 - [x] Workflow Planning
-- [ ] Application Design — EXECUTE
+- [x] Application Design
 - [ ] Units Generation — EXECUTE
 
 ### CONSTRUCTION PHASE
