@@ -21,7 +21,7 @@ Vertical slices — each unit delivers a running system that does more than the 
 **Goal**: A running script that loads config, provisions the global agent, spawns kiro-cli, sends a hardcoded prompt, and streams the response to stdout.
 
 - C7 Config: Load .env, validate prerequisites (kiro-cli on PATH, KIRO_AGENT_NAME, kiro-config/ template)
-- C8 Workspace Provisioner: Provision `~/.kiro/` from `kiro-config/` template (agent JSON, steering, skills). Idempotent.
+- C8 Workspace Provisioner: Sync `~/.kiro/` from `kiro-config/` template (prefix-based: delete + copy `{KIRO_AGENT_NAME}*` files on every startup).
 - C1 ACP Client: Spawn `kiro-cli acp --agent {name}`, initialize, session/new, session/prompt, stream session/update notifications, detect TurnEnd
 - Create `kiro-config/` template directory with the actual agent JSON file (project artifact)
 - Minimal `main.py` entry point that ties it together

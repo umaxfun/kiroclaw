@@ -20,7 +20,7 @@
 
 **What it delivers**: A runnable `main.py` that:
 1. Loads `.env` config and validates prerequisites
-2. Provisions `~/.kiro/` from `kiro-config/` template (idempotent)
+2. Syncs `~/.kiro/` from `kiro-config/` template (prefix-based: delete + copy `{KIRO_AGENT_NAME}*`)
 3. Spawns `kiro-cli acp --agent {name}`
 4. Sends `initialize` → `session/new` → `session/prompt`
 5. Reads `session/update` notifications and prints streaming chunks to stdout
@@ -37,7 +37,7 @@
 **Test scope**:
 - ACP protocol integration: real kiro-cli, full JSON-RPC flow
 - Config validation: missing kiro-cli, missing KIRO_AGENT_NAME, missing template
-- Provisioner idempotency: run twice, second run creates nothing new
+- Provisioner sync: run twice, verify prefix files are replaced correctly and non-prefix files untouched
 
 ---
 
@@ -104,7 +104,7 @@
 
 **What it delivers**: The bot from Unit 3, extended with:
 1. Inbound files: user sends file/document/audio → downloaded to workspace → referenced in ACP prompt
-2. Outbound files: agent emits `<send_file path="..."/>` → bot parses, strips from text, sends via sendDocument
+2. Outbound files: agent emits `<send_file path="...">description</send_file>` → bot parses, strips from text, sends via sendDocument
 3. `/model` command: no args = list models, with arg = set model (persisted in SQLite)
 
 **Project artifacts created**:

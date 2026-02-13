@@ -157,7 +157,9 @@ class Config:
     workspace_base_path: str        # default: "./workspaces/"
     max_processes: int              # default: 5
     idle_timeout_seconds: int       # default: 30
-    kiro_agent_name: str              # REQUIRED — name of the custom global agent (no default, must be set in .env)
+    kiro_agent_name: str            # REQUIRED — name of the custom global agent (no default, must be set in .env)
+    log_level: str                  # default: "INFO" — controls stderr capture and bot event logging
+    kiro_config_path: str           # default: "./kiro-config/" — path to template directory
 
     @classmethod
     def load() -> Config
@@ -181,15 +183,22 @@ class WorkspaceProvisioner:
         # Store config reference for agent name, template path
 
     def provision() -> None
-        # Ensure ~/.kiro/agents/{agent_name}.json exists (REQUIRED — system won't function without it)
-        # Ensure ~/.kiro/steering/ and ~/.kiro/skills/ have required files
-        # Copies from kiro-config/ template directory in bot source tree
-        # Idempotent: only creates missing files, does not overwrite existing
+        # Sync ~/.kiro/ with kiro-config/ template using prefix-based matching:
+        # 1. SAFETY CHECKS (abort if any fail):
+        #    - KIRO_AGENT_NAME is non-empty, >= 3 chars
+        #    - KIRO_AGENT_NAME matches ^[a-zA-Z0-9_-]+$ (no wildcards, dots, slashes)
+        #    - kiro-config/ template contains at least the agent JSON file
+        #    - Count files matching prefix in each target dir — abort if > 20 total
+        # 2. For each of agents/, steering/, skills/ in ~/.kiro/:
+        #    - Delete all files/dirs matching {KIRO_AGENT_NAME}* prefix
+        #    - Copy matching files from kiro-config/ template
+        # 3. Agent config ~/.kiro/agents/{agent_name}.json is REQUIRED
+        # Files outside the bot's prefix are never touched.
 
     def provision_thread_override(thread_workspace_path: str, agent_config: dict) -> None
         # Create .kiro/agents/{agent_name}.json in a specific thread directory
         # For per-thread custom steering (rare, on-demand)
 
-    def _copy_template(src_dir: str, dst_dir: str) -> None
-        # Recursively copy template files, skip existing
+    def _sync_prefix(src_dir: str, dst_dir: str, prefix: str) -> None
+        # Delete all entries matching prefix* in dst_dir, copy from src_dir
 ```

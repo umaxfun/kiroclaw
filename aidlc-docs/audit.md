@@ -553,3 +553,82 @@ All other checks passed clean. Full inception documentation is consistent.
 **Context**: INCEPTION - Full Consistency Check
 
 ---
+
+## Units Generation - Approved
+**Timestamp**: 2026-02-13T04:05:00Z
+**User Input**: "go"
+**AI Response**: Units approved. Proceeding to CONSTRUCTION PHASE — Functional Design for Unit 1.
+**Context**: INCEPTION - Units Generation (Approval)
+
+---
+
+## Functional Design — Unit 1 Plan Created
+**Timestamp**: 2026-02-13T04:10:00Z
+**AI Response**: Created unit1-functional-design-plan.md with 7 plan steps and 5 questions covering: send_file tag format, allowed tools, default model, stderr handling, and provisioner overwrite behavior.
+**Context**: CONSTRUCTION - Functional Design Unit 1 (Steps 1-4)
+
+---
+
+## Functional Design — Unit 1 Answers Received
+**Timestamp**: 2026-02-13T04:15:00Z
+**User Input**: "I answered in the dock."
+**AI Response**: Read all 5 answers. Q1: B (send_file with description). Q2: A (all tools). Q3: A (model auto in agent JSON). Q4: Configurable log level for stderr capture. Q5: Manage only the bot's own agent files within ~/.kiro/, overwrite those freely, don't touch anything else. No ambiguities detected, proceeding to generation.
+**Context**: CONSTRUCTION - Functional Design Unit 1 (Step 5 - Answer Analysis)
+
+---
+
+## Functional Design — Unit 1: Provisioner Design Decision (Prefix-Based Sync)
+**Timestamp**: 2026-02-13T04:20:00Z
+**User Input**: "Yeah, I like the last one. Everything with our prefix is ours to synchronize and like to remove everything and copy new ones. But it's an important design decision. I believe we have to fix it somewhere."
+**AI Response**: Updated all inception docs to reflect prefix-based sync provisioner:
+- requirements.md FR-11: Added managed scope definition, subdirectory agent limitation
+- requirements.md FR-13: Changed "provisioned on first run" to "synced on every startup"
+- components.md C8: Changed from "idempotent create-if-missing" to "prefix-based sync: delete + copy"
+- component-methods.md C8: provision() now does prefix sync, _copy_template → _sync_prefix
+- services.md: Updated entry point, workspace layout, and description
+- component-dependency.md: Updated data flow and key design decisions
+- domain-entities.md: Updated managed files section
+
+Experimental finding: kiro-cli does NOT support subdirectory agents (agents/tg-acp/tg-acp.json fails, agents/tg-acp.json works). Agent configs must be flat files.
+**Context**: CONSTRUCTION - Functional Design Unit 1 (Design Decision)
+
+---
+
+## Functional Design — Unit 1: Provisioner Safety Guardrails
+**Timestamp**: 2026-02-13T04:25:00Z
+**User Input**: "One moment, we have to set some safety mechanism not to delete everything or stuff like that if we will misconfigure."
+**AI Response**: Added 4 safety guardrails to the provisioner: (1) KIRO_AGENT_NAME >= 3 chars, (2) strict alphanumeric+hyphen+underscore pattern, (3) template must contain agent JSON, (4) max 20 files matching prefix. Updated requirements.md FR-11, component-methods.md C8, and domain-entities.md.
+**Context**: CONSTRUCTION - Functional Design Unit 1 (Safety Guardrails)
+
+---
+
+## Functional Design — Unit 1 Artifacts Generated
+**Timestamp**: 2026-02-13T04:30:00Z
+**User Input**: "Yeah, let's go."
+**AI Response**: Generated 3 functional design artifacts for Unit 1:
+- domain-entities.md: Config fields, ACPClientState enum, JSON-RPC message types, provisioner managed files with safety guardrails
+- business-logic-model.md: Config.load() flow, Config.validate_kiro_cli() flow, WorkspaceProvisioner.provision() flow, ACP Client protocol state machine (spawn, initialize, session_new/load/prompt/cancel, stdout/stderr readers, kill), main.py Unit 1 entry point
+- business-rules.md: 8 rule groups (BR-01 through BR-08) covering config validation, startup prerequisites, provisioner safety, provisioner sync, ACP protocol, ACP state, streaming, stderr handling. Test strategy with 5 integration tests and 10 unit tests.
+All plan checkboxes marked complete.
+**Context**: CONSTRUCTION - Functional Design Unit 1 (Step 6 - Generation)
+
+---
+
+## Functional Design — Unit 1: Self-Check
+**Timestamp**: 2026-02-13T04:35:00Z
+**User Input**: "And check it yourself first, please."
+**AI Response**: Performed systematic cross-reference of Unit 1 functional design against all inception docs. Found and fixed 6 issues:
+
+1. requirements.md NFR-01: Missing LOG_LEVEL and KIRO_CONFIG_PATH config values — added
+2. component-methods.md C7: Missing log_level and kiro_config_path fields — added
+3. requirements.md FR-08: `<send_file>` tag format was self-closing (`<send_file path="..."/>`) but Q1 answer chose B (with description: `<send_file path="...">description</send_file>`) — updated
+4. unit-of-work.md Unit 1: "Provisioner idempotency" test description was stale — changed to "Provisioner sync"
+5. unit-of-work.md Unit 4: `<send_file path="..."/>` → `<send_file path="...">description</send_file>`
+6. component-dependency.md: C8 note "runs on first startup / idempotent" → "runs on every startup — prefix-based sync"
+7. unit-of-work-plan.md: C8 description "Idempotent" → prefix-based sync description
+
+All other checks passed: ACP Client methods match, state machine consistent, JSON-RPC format matches FINDINGS.md, main.py flow matches unit definition, test strategy aligns.
+
+**Context**: CONSTRUCTION - Functional Design Unit 1 (Self-Check)
+
+---

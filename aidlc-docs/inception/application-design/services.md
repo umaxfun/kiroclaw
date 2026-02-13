@@ -52,7 +52,7 @@ main.py
     |
     +---> Config.load() — load .env, validate
     +---> Config.validate_kiro_cli() — fail fast if missing
-    +---> WorkspaceProvisioner(config).provision() — first-run: install global agent to ~/.kiro/ from kiro-config/ template
+    +---> WorkspaceProvisioner(config).provision() — sync global agent to ~/.kiro/ from kiro-config/ template (prefix-based: delete + copy {KIRO_AGENT_NAME}* files)
     +---> SessionStore(db_path) — open/create SQLite
     +---> ProcessPool.start(agent_name=config.kiro_agent_name) — spawn warm process
     +---> Register Bot Handlers on aiogram Dispatcher
@@ -62,10 +62,11 @@ main.py
 ## Workspace Directory Layout
 
 ```
-~/.kiro/                                   ← global config (REQUIRED — provisioned on first run / installation)
-  agents/{agent_name}.json                 ← custom agent (REQUIRED) — <send_file> steering, subagent config, tools
-  steering/                                ← global steering files (optional, for additional context)
-  skills/                                  ← global skill files (optional)
+~/.kiro/                                   ← global config (REQUIRED — synced on every startup)
+  agents/{agent_name}.json                 ← custom agent (REQUIRED) — managed by bot (prefix match)
+  steering/{agent_name}*.md                ← bot-managed steering files (prefix match)
+  skills/{agent_name}*/                    ← bot-managed skill files (prefix match)
+  [other files]                            ← NOT touched by bot
 
 ./workspaces/                              ← WORKSPACE_BASE_PATH
   {user_id}/
@@ -74,6 +75,6 @@ main.py
       .kiro/agents/{agent_name}.json       ← local override (takes precedence over global)
 ```
 
-The system requires at least one custom global agent in `~/.kiro/agents/`. This agent defines the bot's core behavior: `<send_file>` XML tag steering in the `prompt` field, subagent configuration, allowed tools, and model settings. The agent config is a project artifact — it lives in the `kiro-config/` template directory in the bot's source tree and is provisioned to `~/.kiro/` as part of first-run setup (or installation on a new machine). The Workspace Provisioner (C8) handles this automatically on bot startup.
+The system requires at least one custom global agent in `~/.kiro/agents/`. This agent defines the bot's core behavior: `<send_file>` XML tag steering in the `prompt` field, subagent configuration, allowed tools, and model settings. The agent config is a project artifact — it lives in the `kiro-config/` template directory in the bot's source tree and is synced to `~/.kiro/` on every startup using prefix-based matching: all files matching `{KIRO_AGENT_NAME}*` are deleted and replaced with fresh copies from the template. Files outside this prefix are never touched.
 
 kiro-cli checks two locations for agent configs: `cwd/.kiro/agents/` (local) and `~/.kiro/agents/` (global). It does NOT walk up parent directories (verified experimentally on v1.26.0). Per-thread overrides are created only when needed by placing `.kiro/agents/` in the thread directory — local takes precedence.

@@ -139,15 +139,15 @@
 
 ## C8: Workspace Provisioner
 
-**Purpose**: Provision the required global `~/.kiro/` config (agent, steering, skills) on first run or installation.
+**Purpose**: Sync the bot's global `~/.kiro/` config (agent, steering, skills) from the `kiro-config/` template on every startup.
 
 **Responsibilities**:
-- On bot startup, ensure `~/.kiro/agents/{KIRO_AGENT_NAME}.json` exists with the correct config — this agent is REQUIRED for the system to function (defines `<send_file>` steering, subagent config, allowed tools)
-- Ensure `~/.kiro/steering/` and `~/.kiro/skills/` have the required files
+- On bot startup, sync all files matching the `{KIRO_AGENT_NAME}*` prefix in `~/.kiro/agents/`, `~/.kiro/steering/`, and `~/.kiro/skills/` — delete existing matches, copy fresh from `kiro-config/` template
+- The agent config `~/.kiro/agents/{KIRO_AGENT_NAME}.json` is REQUIRED for the system to function (defines `<send_file>` steering, subagent config, allowed tools)
 - Copy from a `kiro-config/` template directory in the bot's source tree
 - The template directory is a project artifact, version-controlled alongside the bot code — it IS the installation payload for the agent config
-- Idempotent — safe to call on every startup (only creates missing files, does not overwrite existing)
+- Prefix-based sync — safe to call on every startup (always brings `~/.kiro/` in sync with template). Files outside the bot's prefix are never touched.
 - Does NOT provision per-thread — global agent is found from any `cwd` automatically
 - For thread-specific overrides (rare): bot can create `.kiro/agents/` inside a thread's workspace directory — local takes precedence over global
 
-**Owns**: The global `~/.kiro/` agent/steering/skills files. Template files in `kiro-config/`.
+**Owns**: Files matching `{KIRO_AGENT_NAME}*` in `~/.kiro/agents/`, `~/.kiro/steering/`, `~/.kiro/skills/`. Template files in `kiro-config/`.

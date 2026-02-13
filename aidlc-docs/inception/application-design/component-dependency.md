@@ -37,7 +37,7 @@
 | C8: Workspace       |-----> C7: Config
 | Provisioner         |
 +---------------------+
-(runs on first startup / idempotent — only creates missing files)
+(runs on every startup — prefix-based sync of {KIRO_AGENT_NAME}* files)
 ```
 
 ## Communication Patterns
@@ -55,7 +55,7 @@
 
 ```
 [STARTUP]
-main.py --> C8: Workspace Provisioner --> ~/.kiro/agents/ (global agent config)
+main.py --> C8: Workspace Provisioner --> ~/.kiro/ (sync {agent_name}* prefix: delete + copy from template)
 
 [PER MESSAGE]
 Telegram Update
@@ -92,4 +92,4 @@ C6: Bot Handlers
 - **C6 is the only orchestrator**: All coordination logic lives here.
 - **C7 is injected at startup**: Config is loaded once and passed to components that need it.
 - **Subagents are kiro-cli internal**: The bot provisions agent configs that enable subagents, but does not manage subagent lifecycle — kiro-cli handles that.
-- **Skills and steering are file-based**: The bot provisions files in `~/.kiro/` (global); kiro-cli discovers and loads them via its agent config. Per-thread overrides use local `.kiro/` in the thread directory.
+- **Skills and steering are file-based**: The bot syncs files matching `{KIRO_AGENT_NAME}*` prefix in `~/.kiro/` from the `kiro-config/` template on every startup (delete + copy). kiro-cli discovers and loads them via its agent config. Per-thread overrides use local `.kiro/` in the thread directory.

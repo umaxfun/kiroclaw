@@ -68,7 +68,7 @@ All architectural decisions, protocol details, and tech stack choices are docume
 
 ### FR-08: File Handling (Bidirectional)
 - **Inbound**: Users can send files/documents/audio via Telegram; bot downloads and places them in the thread's workspace directory, then references them in the ACP prompt
-- **Outbound via steering**: The global custom agent's `prompt` field instructs the Kiro agent to emit an XML tag (e.g., `<send_file path="..."/>`) when it wants to send a file to the user. The bot parses these tags from the agent's response, strips them from the displayed text, and sends the referenced files via Telegram's `sendDocument`
+- **Outbound via steering**: The global custom agent's `prompt` field instructs the Kiro agent to emit an XML tag (e.g., `<send_file path="...">description</send_file>`) when it wants to send a file to the user. The bot parses these tags from the agent's response, strips them from the displayed text, and sends the referenced files via Telegram's `sendDocument`
 - Support common file types: text, code, documents, audio, images
 
 ### FR-09: Bot Commands
@@ -84,6 +84,7 @@ All architectural decisions, protocol details, and tech stack choices are docume
 - The system REQUIRES at least one custom global agent in `~/.kiro/agents/{KIRO_AGENT_NAME}.json` — this defines core bot behavior (`<send_file>` steering, subagent config, allowed tools, model)
 - The agent config is a project artifact: lives in `kiro-config/` template directory, provisioned to `~/.kiro/` on first run / installation to a new machine
 - kiro-cli does NOT walk up directories to find `.kiro/` — it only checks exact `cwd/.kiro/` and `~/.kiro/` (verified experimentally on v1.26.0, despite docs suggesting otherwise)
+- kiro-cli does NOT support subdirectory-based agents (e.g., `agents/tg-acp/tg-acp.json`) — agent configs must be flat files `agents/{name}.json` (verified experimentally on v1.26.0)
 - Global agent is found from any thread directory without symlinks or per-thread setup
 - Configurable agent name in `.env` (`KIRO_AGENT_NAME`, REQUIRED)
 - When starting a kiro-cli process, pass `--agent <agent_name>`
@@ -92,6 +93,8 @@ All architectural decisions, protocol details, and tech stack choices are docume
 - The `resources` field with `file://` URIs also works but relative paths resolve from `cwd`, not from the agent config directory — use absolute paths for global agents
 - For thread-specific overrides: create a `.kiro/agents/{KIRO_AGENT_NAME}.json` inside that thread's workspace directory — local takes precedence (`WARNING: Agent conflict. Using workspace version.`)
 - Trade-off: uses `~/.kiro/` (user-level), affects all kiro-cli sessions on the machine — acceptable for PoC/single-purpose deployment
+- **Managed scope**: The bot owns all files matching the `{KIRO_AGENT_NAME}*` prefix in `~/.kiro/agents/`, `~/.kiro/steering/`, and `~/.kiro/skills/`. On every startup, the provisioner deletes all matching files and copies fresh from the `kiro-config/` template. Files outside this prefix are never touched.
+- **Safety guardrails**: `KIRO_AGENT_NAME` must be non-empty (>= 3 chars), match `^[a-zA-Z0-9_-]+$` (no wildcards/dots/slashes), and the template must contain the agent JSON. If more than 20 files match the prefix across all directories, provisioner aborts to prevent accidental mass deletion.
 
 ### FR-12: Subagent Support
 - Kiro CLI natively supports subagents — specialized agents spawned by the main agent for autonomous parallel task execution
@@ -106,7 +109,7 @@ All architectural decisions, protocol details, and tech stack choices are docume
 - Skill files must have YAML frontmatter with `name` and `description` fields
 - Skills are progressively loaded by kiro-cli: only frontmatter at startup, full content on demand
 - Global steering files in `~/.kiro/steering/*.md` are auto-loaded by kiro-cli when using any agent
-- The global config is a project artifact: the `kiro-config/` template directory in the bot's source tree contains the agent JSON, steering files, and skills — provisioned to `~/.kiro/` on first run or installation to a new machine
+- The global config is a project artifact: the `kiro-config/` template directory in the bot's source tree contains the agent JSON, steering files, and skills — synced to `~/.kiro/` on every startup using prefix-based matching (see FR-11 managed scope)
 
 ---
 
@@ -121,6 +124,8 @@ All architectural decisions, protocol details, and tech stack choices are docume
   - `MAX_PROCESSES` — upper limit on kiro-cli process pool size (default: 5)
   - `IDLE_TIMEOUT_SECONDS` — idle timeout before killing extra processes (default: 30)
   - `KIRO_AGENT_NAME` — REQUIRED, name of the custom global agent
+  - `LOG_LEVEL` — logging verbosity for kiro-cli stderr and bot events (default: INFO)
+  - `KIRO_CONFIG_PATH` — path to kiro-config/ template directory (default: ./kiro-config/)
 
 ### NFR-02: Startup Validation
 - Fail fast on startup if `kiro-cli` is not found on PATH
