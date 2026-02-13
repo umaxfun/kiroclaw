@@ -477,3 +477,35 @@ All other checks passed clean. No inconsistencies found between design documents
 **Context**: INCEPTION - Final Check Pass
 
 ---
+
+## Units Generation - Plan Created
+**Timestamp**: 2026-02-13T03:35:00Z
+**User Input**: "Okay, let's go next."
+**AI Response**: Created unit-of-work-plan.md with 6-unit decomposition following the component dependency graph bottom-up. Only 1 question needed — whether C4+C5 should be one unit or two. All other decomposition decisions are clear from the dependency graph and incremental testability requirement.
+**Context**: INCEPTION - Units Generation (Part 1 - Steps 1-4)
+
+---
+
+## Units Generation - User Feedback on Plan
+**Timestamp**: 2026-02-13T03:40:00Z
+**User Input**: "I think that workspace provision should happen earlier, if not in the unit 1 maybe. And Olada looks good to me, frankly speaking."
+**AI Response**: Moved C8 Workspace Provisioner into Unit 1 (foundation). Updated plan with 4 vertical-slice units. Previous feedback incorporated: Unit 1 was "strange" because it didn't create kiro-config/ — now it does. Unit 3 SQLite uses real operations, no mocks. Decomposition changed from component-oriented to vertical slices (each unit is a running system).
+**Context**: INCEPTION - Units Generation (Part 1 - Plan Revision)
+
+---
+
+## Units Generation - Previous User Feedback
+**Timestamp**: 2026-02-13T03:38:00Z
+**User Input**: "Unit 1 is really strange. Where do we create KiroConfig in the first place? In unit 3, let's use real SQLite operations without mocks. Well, others are looking good I believe. But, frankly speaking I don't like the units. But I can't say what specifically I don't like. I think it will not converge into the working system."
+**AI Response**: Rethought decomposition from component-oriented (won't converge) to vertical slices (each unit is a running system). Proposed 4 units: (1) Foundation + ACP echo, (2) Session persistence, (3) Telegram bot with streaming, (4) Process pool + hardening.
+**Context**: INCEPTION - Units Generation (Part 1 - User Feedback)
+
+---
+
+## Units Generation - Plan Revision (Split Unit 3)
+**Timestamp**: 2026-02-13T03:45:00Z
+**User Input**: "No, streaming is very important actually. But file handling commands and canceling flight could be separated."
+**AI Response**: Split old Unit 3 into three units: Unit 3 (Telegram bot + streaming, text only), Unit 4 (file handling + commands), Unit 5 (process pool + cancel). Now 5 units total. Streaming stays in the first bot unit. File handling, /model command, cancel-in-flight, and process pool are layered on after.
+**Context**: INCEPTION - Units Generation (Part 1 - Plan Revision 2)
+
+---
