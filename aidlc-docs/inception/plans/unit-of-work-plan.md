@@ -8,12 +8,12 @@ Vertical slices — each unit delivers a running system that does more than the 
 
 ## Plan Steps
 
-- [ ] Define units with component assignments, responsibilities, and test scope
-- [ ] Define unit dependency ordering (build sequence)
-- [ ] Generate `aidlc-docs/inception/application-design/unit-of-work.md`
-- [ ] Generate `aidlc-docs/inception/application-design/unit-of-work-dependency.md`
-- [ ] Document code organization strategy in `unit-of-work.md` (greenfield)
-- [ ] Validate unit boundaries and dependencies
+- [x] Define units with component assignments, responsibilities, and test scope
+- [x] Define unit dependency ordering (build sequence)
+- [x] Generate `aidlc-docs/inception/application-design/unit-of-work.md`
+- [x] Generate `aidlc-docs/inception/application-design/unit-of-work-dependency.md`
+- [x] Document code organization strategy in `unit-of-work.md` (greenfield)
+- [x] Validate unit boundaries and dependencies
 
 ## Unit Decomposition
 

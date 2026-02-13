@@ -25,7 +25,7 @@ flowchart TD
         RA["Requirements Analysis<br/>COMPLETED"]
         WP["Workflow Planning<br/>COMPLETED"]
         AD["Application Design<br/>COMPLETED"]
-        UG["Units Generation<br/>EXECUTE"]
+        UG["Units Generation<br/>COMPLETED"]
     end
     
     subgraph CONSTRUCTION["CONSTRUCTION PHASE"]
@@ -48,7 +48,7 @@ flowchart TD
     style RA fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
     style WP fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
     style AD fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
-    style UG fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
+    style UG fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
     style FD fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
     style CG fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
     style BT fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
@@ -68,7 +68,7 @@ INCEPTION PHASE:
   3. User Stories           — SKIPPED (single user type, requirements sufficient)
   4. Workflow Planning      — COMPLETED
   5. Application Design    — COMPLETED
-  6. Units Generation      — EXECUTE
+  6. Units Generation      — COMPLETED
 
 CONSTRUCTION PHASE (per unit):
   7. Functional Design     — EXECUTE
@@ -90,7 +90,7 @@ CONSTRUCTION PHASE (per unit):
 - [x] Workflow Planning (COMPLETED)
 - [x] Application Design (COMPLETED)
   - **Rationale**: Multiple new components needed (ACP client, process pool, session store, bot handlers, file handler, workspace provisioner). Component boundaries, responsibilities, and interactions need definition before coding
-- [ ] Units Generation — EXECUTE
+- [x] Units Generation (COMPLETED)
   - **Rationale**: System decomposes into distinct units that should be built and tested incrementally per the user's requirement. Units need explicit ordering to match the incremental testability approach
 
 ### CONSTRUCTION PHASE
