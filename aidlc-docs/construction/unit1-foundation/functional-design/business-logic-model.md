@@ -113,7 +113,7 @@ ACPClient lifecycle:
        - Extract params.update.sessionUpdate type
        - Yield each notification to caller
     5. When response with matching id arrives (stopReason: "end_turn"):
-       - Yield a TurnEnd marker
+       - Yield a turn_end marker
        - State = READY
 
   SESSION_CANCEL(session_id):
@@ -161,8 +161,8 @@ main.py (Unit 1):
   7. session_id = await client.session_new(cwd=workspace_dir)
   8. Prompt user for input (or use hardcoded test message)
   9. async for update in client.session_prompt(session_id, content):
-       - If AgentMessageChunk: print chunk text to stdout (no newline)
-       - If TurnEnd: print newline, break
+       - If agent_message_chunk: print chunk text to stdout (no newline)
+       - If turn_end: print newline, break
   10. await client.kill()
 ```
 

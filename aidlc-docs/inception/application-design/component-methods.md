@@ -22,7 +22,7 @@ class ACPClient:
         # Load existing session
 
     async def session_prompt(session_id: str, content: list[dict]) -> AsyncIterator[dict]
-        # Send prompt, yield session/update notifications until TurnEnd
+        # Send prompt, yield session/update notifications until turn_end
 
     async def session_cancel(session_id: str) -> None
         # Cancel in-flight prompt

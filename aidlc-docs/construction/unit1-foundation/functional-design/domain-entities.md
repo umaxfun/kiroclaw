@@ -73,9 +73,9 @@ JSONRPCNotification
 SessionUpdate
   sessionId: str
   update:
-    sessionUpdate: str              # "AgentMessageChunk", "TurnEnd", "ToolCall",
-                                    # "ToolCallUpdate", "plan"
-    content: dict | None            # for AgentMessageChunk: { type: "text", text: str }
+    sessionUpdate: str              # "agent_message_chunk", "turn_end", "tool_call",
+                                    # "tool_call_update", "plan"
+    content: dict | None            # for agent_message_chunk: { type: "text", text: str }
 ```
 
 ## Provisioner Managed Files

@@ -83,9 +83,9 @@
 **Purpose**: Accumulate streaming chunks and deliver them to Telegram via `sendMessageDraft` / `sendMessage`.
 
 **Responsibilities**:
-- Accumulate `AgentMessageChunk` text into a buffer
+- Accumulate `agent_message_chunk` text into a buffer
 - Call `sendMessageDraft` with sliding window (last ~4000 chars) as chunks arrive
-- On `TurnEnd`, finalize: split full response into <=4096 char segments, send each via `sendMessage`
+- On `turn_end`, finalize: split full response into <=4096 char segments, send each via `sendMessage`
 - Parse and strip `<send_file>` XML tags from the response before sending
 - Manage `draft_id` lifecycle per streaming response
 - Handle `message_thread_id` for forum topic targeting

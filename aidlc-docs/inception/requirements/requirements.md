@@ -26,9 +26,9 @@ All architectural decisions, protocol details, and tech stack choices are docume
 - Communicate with `kiro-cli acp` via stdin/stdout using JSON-RPC 2.0
 - Protocol flow: `initialize` → `session/new` or `session/load` → `session/prompt`
 - Read `session/update` notifications for streaming chunks
-- Detect `TurnEnd` / `stopReason: "end_turn"` to finalize responses
+- Detect `turn_end` / `stopReason: "end_turn"` to finalize responses
 - Support `session/cancel` to abort in-flight prompts
-- Use `content` field (not `prompt`) in `session/prompt` params
+- Use `prompt` field (not `content`) in `session/prompt` params
 
 ### FR-03: Streaming Responses
 - Stream agent responses to Telegram using `sendMessageDraft` API (Bot API 9.3)

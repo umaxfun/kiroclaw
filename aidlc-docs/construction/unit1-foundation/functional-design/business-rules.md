@@ -71,9 +71,9 @@
 | Rule | Description |
 |------|-------------|
 | BR-07.1 | session/update notifications arrive between prompt request and response |
-| BR-07.2 | AgentMessageChunk contains incremental text (not cumulative) |
-| BR-07.3 | TurnEnd signals the prompt response is complete |
-| BR-07.4 | Other update types (ToolCall, ToolCallUpdate, plan) are logged but not acted on in Unit 1 |
+| BR-07.2 | agent_message_chunk contains incremental text (not cumulative) |
+| BR-07.3 | turn_end signals the prompt response is complete |
+| BR-07.4 | Other update types (tool_call, tool_call_update, plan) are logged but not acted on in Unit 1 |
 | BR-07.5 | Subagent notifications (_session/terminate) are logged, no action |
 
 ## BR-08: stderr Handling
@@ -90,9 +90,9 @@
 
 | Test | What it verifies |
 |------|-----------------|
-| test_acp_full_flow | initialize → session/new → prompt → streaming chunks → TurnEnd |
+| test_acp_full_flow | initialize → session/new → prompt → streaming chunks → turn_end |
 | test_acp_session_new_returns_id | session/new returns a valid session_id string |
-| test_acp_streaming_chunks | At least 1 AgentMessageChunk received before TurnEnd |
+| test_acp_streaming_chunks | At least 1 agent_message_chunk received before turn_end |
 | test_acp_process_kill | client.kill() terminates the subprocess cleanly |
 | test_acp_dead_detection | After kill, is_alive() returns False, state is DEAD |
 

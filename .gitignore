@@ -1,11 +1,27 @@
-# Python-generated files
+# Python
 __pycache__/
-*.py[oc]
-build/
+*.py[cod]
+*.egg-info/
 dist/
-wheels/
-*.egg-info
+build/
+.venv/
 
-# Virtual environments
-.venv
+# Environment
+.env
+
+# Runtime
+workspaces/
+tg-acp.db
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Kiro
+.kiro/
+
+# Temp
 .tmp/

@@ -35,8 +35,8 @@ Bot Handlers (C6)
     |
     +---> ACPClient.session_prompt(content)
     |         |
-    |         +---> StreamWriter.write_chunk() for each AgentMessageChunk
-    |         +---> StreamWriter.finalize() on TurnEnd
+    |         +---> StreamWriter.write_chunk() for each agent_message_chunk
+    |         +---> StreamWriter.finalize() on turn_end
     |
     +---> [If <send_file> tags found] FileHandler.send_file() for each
     |

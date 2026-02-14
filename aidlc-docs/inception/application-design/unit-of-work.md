@@ -24,7 +24,7 @@
 3. Spawns `kiro-cli acp --agent {name}`
 4. Sends `initialize` → `session/new` → `session/prompt`
 5. Reads `session/update` notifications and prints streaming chunks to stdout
-6. Detects `TurnEnd` and exits cleanly
+6. Detects `turn_end` and exits cleanly
 
 **Project artifacts created**:
 - `kiro-config/` template directory with agent JSON, steering files

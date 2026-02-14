@@ -22,10 +22,10 @@ Vertical slices — each unit delivers a running system that does more than the 
 
 - C7 Config: Load .env, validate prerequisites (kiro-cli on PATH, KIRO_AGENT_NAME, kiro-config/ template)
 - C8 Workspace Provisioner: Sync `~/.kiro/` from `kiro-config/` template (prefix-based: delete + copy `{KIRO_AGENT_NAME}*` files on every startup).
-- C1 ACP Client: Spawn `kiro-cli acp --agent {name}`, initialize, session/new, session/prompt, stream session/update notifications, detect TurnEnd
+- C1 ACP Client: Spawn `kiro-cli acp --agent {name}`, initialize, session/new, session/prompt, stream session/update notifications, detect turn_end
 - Create `kiro-config/` template directory with the actual agent JSON file (project artifact)
 - Minimal `main.py` entry point that ties it together
-- **Test**: Run the script, send a prompt, see streaming chunks printed to stdout. Verify initialize → session/new → prompt → streaming → TurnEnd flow.
+- **Test**: Run the script, send a prompt, see streaming chunks printed to stdout. Verify initialize → session/new → prompt → streaming → turn_end flow.
 
 ### Unit 2: Session Persistence (C3)
 **Goal**: The system remembers sessions across runs. Second invocation loads the existing session instead of creating a new one.

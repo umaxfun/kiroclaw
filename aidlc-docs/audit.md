@@ -632,3 +632,86 @@ All other checks passed: ACP Client methods match, state machine consistent, JSO
 **Context**: CONSTRUCTION - Functional Design Unit 1 (Self-Check)
 
 ---
+
+## Functional Design — Unit 1 Approved
+**Timestamp**: 2026-02-13T04:40:00Z
+**User Input**: "I will trust you this time. Approved."
+**AI Response**: Functional Design for Unit 1 approved. Proceeding to Code Generation for Unit 1.
+**Context**: CONSTRUCTION - Functional Design Unit 1 (Approval)
+
+---
+
+## Code Generation — Unit 1: Plan Created
+**Timestamp**: 2026-02-13T05:00:00Z
+**AI Response**: Created unit1-foundation-code-generation-plan.md with 10 steps covering: project structure setup, Config module (C7), Provisioner module (C8), ACP Client module (C1), agent config template, .env.example, main.py CLI entry point, tests (config + provisioner + ACP protocol), dependency install + verify, and code summary documentation. Updated aidlc-state.md to "CONSTRUCTION - Code Generation Unit 1 (Part 1 - Planning)".
+**Context**: CONSTRUCTION - Code Generation Unit 1 (Part 1 - Steps 1-5)
+
+---
+
+## Code Generation — Unit 1: Approval Prompt
+**Timestamp**: 2026-02-13T05:01:00Z
+**AI Response**: Presenting code generation plan for user approval.
+**Context**: CONSTRUCTION - Code Generation Unit 1 (Part 1 - Step 6)
+
+---
+
+## Code Generation — Unit 1: Plan Discussion (src layout)
+**Timestamp**: 2026-02-13T05:05:00Z
+**User Input**: "Do we need the folder src with one subfolder?"
+**AI Response**: Explained src layout vs flat layout trade-offs. src/tg_acp/ is standard Python convention, avoids import ambiguity, zero config with uv/pyproject.toml. Flat tg_acp/ is simpler but needs pyproject.toml tweaks.
+**Context**: CONSTRUCTION - Code Generation Unit 1 (Part 1 - Plan Discussion)
+
+---
+
+## Code Generation — Unit 1: Plan Approved
+**Timestamp**: 2026-02-13T05:06:00Z
+**User Input**: "Yeah, okay. If it means something then we can go with that. Let's go with the correct one, whatever it means."
+**AI Response**: Plan approved with src layout. Proceeding to Part 2 — Code Generation.
+**Context**: CONSTRUCTION - Code Generation Unit 1 (Part 1 - Approval)
+
+---
+
+## Code Generation — Unit 1: Execution Complete
+**Timestamp**: 2026-02-14T01:00:00Z
+**AI Response**: Executed all 10 steps of the code generation plan for Unit 1.
+
+### Files Created:
+- `src/tg_acp/__init__.py`, `config.py`, `provisioner.py`, `acp_client.py`
+- `kiro-config/agents/tg-acp.json`, `kiro-config/steering/.gitkeep`, `kiro-config/skills/.gitkeep`
+- `.env.example`, `main.py`
+- `tests/__init__.py`, `test_config.py`, `test_provisioner.py`, `test_acp_protocol.py`
+- `aidlc-docs/construction/unit1-foundation/code/code-summary.md`
+
+### Test Results:
+- `test_config.py`: 11/11 passed
+- `test_provisioner.py`: 10/10 passed
+- `test_acp_protocol.py`: 5/5 passed (real kiro-cli)
+
+### Bugs Found and Fixed During Testing:
+1. kiro-cli `session/prompt` expects `prompt` field, not `content` (FINDINGS.md was wrong) — fixed in acp_client.py and FINDINGS.md
+2. Session update types are snake_case (`agent_message_chunk`), not PascalCase (`AgentMessageChunk`) — fixed in acp_client.py, tests, and FINDINGS.md
+3. Non-session/update notifications (MCP init, metadata) were being yielded as empty updates — fixed by filtering for `session/update` method only
+4. Missing `pytest-timeout` dependency — added to pyproject.toml dev deps
+
+**Context**: CONSTRUCTION - Code Generation Unit 1 (Part 2 - Steps 10-16)
+
+---
+
+## Code Generation — Unit 1: Layout Discussion
+**Timestamp**: 2026-02-14T01:05:00Z
+**User Input**: "And what is the hatchling? What's the build system? What's this?"
+**AI Response**: Explained hatchling is the build backend needed for src layout to work with uv. It tells the build system where the package lives.
+**User Input**: "But do we need it? Why do we even need some build system? What's that? If it is not required, let's drop it altogether."
+**AI Response**: Explained the trade-off: without build backend, src layout imports won't work. Options: keep hatchling or switch to flat tg_acp/ layout. User chose to keep it.
+**User Input**: "Yeah, okay. If it is required for something, let's leave it alone."
+**Context**: CONSTRUCTION - Code Generation Unit 1 (Discussion)
+
+---
+
+## Code Generation — Unit 1: Approved
+**Timestamp**: 2026-02-14T02:00:00Z
+**User Input**: "Well, it looks like you can close the test. All tests are passed, the review is completed."
+**AI Response**: Unit 1 Code Generation approved. All 26 tests passing. Proceeding to next unit.
+**Context**: CONSTRUCTION - Code Generation Unit 1 (Approval)
+
+---

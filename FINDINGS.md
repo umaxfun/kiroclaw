@@ -63,11 +63,11 @@ kiro-cli acp
   "method": "session/prompt",
   "params": {
     "sessionId": "sess_abc123",
-    "content": [{ "type": "text", "text": "User message here" }]
+    "prompt": [{ "type": "text", "text": "User message here" }]
   }
 }
 ```
-Note: Kiro CLI uses `content` (not `prompt`) in `session/prompt` params.
+Note: Kiro CLI uses `prompt` (not `content`) in `session/prompt` params.
 
 #### Streaming Update (Agent → Client, notification)
 ```json
@@ -148,10 +148,12 @@ Kiro extends ACP with custom methods prefixed `_kiro.dev/`:
 
 | Update Type | Description |
 |-------------|-------------|
-| `AgentMessageChunk` | Streaming text/content from the agent |
-| `ToolCall` | Tool invocation with name, parameters, status |
-| `ToolCallUpdate` | Progress updates for running tools |
-| `TurnEnd` | Signals the agent turn has completed |
+| `agent_message_chunk` | Streaming text/content from the agent |
+| `tool_call` | Tool invocation with name, parameters, status |
+| `tool_call_update` | Progress updates for running tools |
+| `turn_end` | Signals the agent turn has completed |
+
+Note: These are snake_case, not PascalCase as shown in some documentation.
 
 ### Logging
 
@@ -259,8 +261,8 @@ which fits well with managing ACP subprocesses via `asyncio`.
 5. Load session: `session/load` (existing session) or `session/new` (first message)
 6. Bot writes `session/prompt` JSON-RPC to kiro-cli stdin
 7. Bot reads `session/update` notifications from kiro-cli stdout
-8. For each `AgentMessageChunk`, bot calls `sendMessageDraft` (same `draft_id`)
-9. On `TurnEnd` / `stopReason: "end_turn"`, bot calls `sendMessage` with final text
+8. For each `agent_message_chunk`, bot calls `sendMessageDraft` (same `draft_id`)
+9. On `turn_end` / `stopReason: "end_turn"`, bot calls `sendMessage` with final text
 10. Release process back to pool, start 30s idle timer
 11. On idle timeout: if pool size > 1, kill the process; if pool size == 1, keep it warm
 
