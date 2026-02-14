@@ -1323,3 +1323,26 @@ Also verified: bot in BotContext is necessary because handle_queued_request need
 **Context**: CONSTRUCTION - Code Generation Unit 5 (Plan Third Review)
 
 ---
+
+## Code Generation — Unit 5: Plan Approved
+**Timestamp**: 2026-02-14T22:00:00Z
+**User Input**: "Okay, let's go."
+**AI Response**: User approved the code generation plan. Proceeding to Part 2 — Generation. Starting with Step 1: Create process_pool.py.
+**Context**: CONSTRUCTION - Code Generation Unit 5 (Plan Approved, Starting Generation)
+
+---
+
+## Code Generation — Unit 5: Generation Complete
+**Timestamp**: 2026-02-14T22:30:00Z
+**AI Response**: Completed all 6 steps of the code generation plan:
+
+1. ✅ Created `src/tg_acp/process_pool.py` — SlotStatus, ProcessSlot, QueuedRequest, InFlightRequest, RequestQueue, InFlightTracker, ProcessPool (with acquire/release/reaper/shutdown)
+2. ✅ Modified `src/tg_acp/bot_handlers.py` — BotContext with pool+bot, handle_message refactored into thin wrapper + handle_message_internal, cancel detection, queue enqueue/dequeue, /model with pool, _handle_queued_request
+3. ✅ Modified `main.py` — ProcessPool init, BotContext with pool+bot, shutdown hook
+4. ✅ Updated `tests/test_bot_handlers.py` — pool-based mocks, removed TestClientRespawn, added TestPoolBusy
+5. ✅ All 77 tests pass, 0 failures
+6. ✅ Created code summary at `aidlc-docs/construction/unit5-process-pool-cancel/code/code-summary.md`
+
+**Context**: CONSTRUCTION - Code Generation Unit 5 COMPLETE
+
+---

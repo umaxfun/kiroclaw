@@ -16,7 +16,7 @@
 
 ## Steps
 
-- [ ] Step 1: Create `src/tg_acp/process_pool.py` — All pool-related classes:
+- [x] Step 1: Create `src/tg_acp/process_pool.py` — All pool-related classes:
   - `SlotStatus` enum (IDLE, BUSY)
   - `ProcessSlot` dataclass (slot_id, client, status, last_used, session_id, thread_id)
   - `QueuedRequest` dataclass (thread_id, user_id, message_text, files, chat_id, message_thread_id)
@@ -31,7 +31,7 @@
     - `_reaper_loop()` — background task, check every idle_timeout/2, kill idle processes (never last)
     - `shutdown()` — cancel reaper, kill all slots, clear list
 
-- [ ] Step 2: Modify `src/tg_acp/bot_handlers.py` — Update BotContext and refactor handlers:
+- [x] Step 2: Modify `src/tg_acp/bot_handlers.py` — Update BotContext and refactor handlers:
   - Change `BotContext.__init__` to take `pool: ProcessPool` instead of `client: ACPClient`; remove `client_lock`; add `bot: Bot` reference (needed by handle_message_internal and handle_queued_request for StreamWriter and error messages)
   - Refactor `handle_message()` into thin wrapper + `handle_message_internal()`:
     - Thin wrapper: extract fields from Message, compute workspace_path via create_workspace_dir (deterministic from config.workspace_base_path + user_id + thread_id, idempotent), download files to workspace if any, then call internal
@@ -43,14 +43,14 @@
   - Add `handle_queued_request()` function that calls `handle_message_internal()`
   - Update imports: add ProcessPool and QueuedRequest from process_pool; change `from tg_acp.acp_client import ACPClient, TURN_END` to just `TURN_END` (ACPClient no longer used directly); keep asyncio import (needed for create_task in queue processing)
 
-- [ ] Step 3: Modify `main.py` — Update entry point for pool:
+- [x] Step 3: Modify `main.py` — Update entry point for pool:
   - Replace `ACPClient.spawn()` + `initialize()` with `ProcessPool(config)` + `pool.initialize()`
   - Create Bot instance before BotContext (BotContext now needs bot reference)
   - Update `BotContext(config, store, pool, bot)` — no more client or client_lock
   - Update `on_shutdown()` to call `pool.shutdown()` instead of `client.kill()`
   - Remove direct ACPClient import (pool handles it internally)
 
-- [ ] Step 4: Update existing tests for Unit 5 compatibility:
+- [x] Step 4: Update existing tests for Unit 5 compatibility:
   - Update all test files that construct `BotContext` — change from `client=...` to `pool=...`
   - Update mocks: replace `mock_client` + `mock_client_lock` with `mock_pool` that has `acquire()` returning a mock slot (with `.client` attribute), `release()`, `in_flight.track()` returning an `asyncio.Event()`, `in_flight.untrack()`, `request_queue.dequeue()` returning None
   - The mock slot's `.client` attribute should have the same mock methods as the old `mock_client` (session_new, session_load, session_prompt, session_cancel, is_alive, etc.)
@@ -59,6 +59,6 @@
   - Update error/guard tests to verify pool.acquire is not called (instead of client.session_prompt)
   - Verify all existing tests pass with the new BotContext signature
 
-- [ ] Step 5: Run all tests, verify no regressions: `uv run pytest`
+- [x] Step 5: Run all tests, verify no regressions: `uv run pytest`
 
-- [ ] Step 6: Create `aidlc-docs/construction/unit5-process-pool-cancel/code/code-summary.md`
+- [x] Step 6: Create `aidlc-docs/construction/unit5-process-pool-cancel/code/code-summary.md`
