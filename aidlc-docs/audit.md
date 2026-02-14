@@ -1244,3 +1244,82 @@ All functional design artifacts are now consistent with existing code and ready 
 **Context**: CONSTRUCTION - Functional Design Unit 5 (Final Consistency Check)
 
 ---
+
+## Code Generation — Unit 5: Plan Created
+**Timestamp**: 2026-02-14T21:10:00Z
+**User Input**: "Okay, let's go."
+**AI Response**: User approved Functional Design Unit 5. Proceeding to Code Generation Part 1 (Planning). Created code generation plan at `aidlc-docs/construction/plans/unit5-process-pool-cancel-code-generation-plan.md` with 6 steps.
+**Context**: CONSTRUCTION - Code Generation Unit 5 (Part 1 - Planning)
+
+---
+
+## Code Generation — Unit 5: Approval Prompt
+**Timestamp**: 2026-02-14T21:11:00Z
+**AI Response**: Presenting code generation plan to user for approval. Plan has 6 steps: (1) Create process_pool.py, (2) Modify bot_handlers.py, (3) Modify main.py, (4) Update existing tests, (5) Run tests, (6) Code summary.
+**Context**: CONSTRUCTION - Code Generation Unit 5 (Awaiting Plan Approval)
+
+---
+
+## Code Generation — Unit 5: Plan Self-Check
+**Timestamp**: 2026-02-14T21:20:00Z
+**User Input**: "Double check it yourself."
+**AI Response**: Performed thorough self-check of the code generation plan against all 3 functional design artifacts, existing code, and existing tests. Found 2 issues:
+
+1. **Missing `bot` parameter in handle_message_internal**: The refactored function needs a Bot reference for StreamWriter and error messages (can't use `message.answer()` since it doesn't have the Message object). Added `bot` parameter to Step 2 description and updated Step 3 to create Bot before BotContext.
+
+2. **TestClientRespawn needs rework, not just mock update**: The existing test class tests direct client respawn behavior which no longer applies — pool handles crash detection internally. Updated Step 4 to explicitly call out this rework.
+
+Also expanded Step 4 mock details to be more specific about what the mock_pool needs (acquire returning mock slot with .client, in_flight.track returning Event, request_queue.dequeue returning None).
+
+No structural gaps found — all functional design entities, methods, business rules, and flows are covered by the 6 steps.
+
+**Context**: CONSTRUCTION - Code Generation Unit 5 (Plan Self-Check)
+
+---
+
+## Code Generation — Unit 5: Plan Second Review
+**Timestamp**: 2026-02-14T21:35:00Z
+**User Input**: "Let's review again."
+**AI Response**: Performed second thorough review of the code generation plan. Found 4 additional issues:
+
+1. **workspace_path needed for file download in thin wrapper**: File download requires workspace_path (from session lookup or create_workspace_dir). Session lookup is SQLite-only (no slot needed), so thin wrapper can derive workspace_path before calling internal. Added workspace_path to QueuedRequest dataclass and handle_message_internal signature. handle_queued_request passes it through from the request.
+
+2. **session_id NameError in finally block**: If exception occurs before session_id is set in try block, the finally block's `pool.release(slot, session_id, thread_id)` would fail. Added note to initialize session_id=None before try.
+
+3. **Missing outbound file processing + missing file retry in plan**: Step 2 didn't mention that the outbound file processing and missing file retry logic (from Unit 4) needs to be inside handle_message_internal's try block. Added explicit mention.
+
+4. **Import details**: asyncio import stays (needed for create_task), ACPClient import changes to just TURN_END. Updated plan accordingly.
+
+Also verified: bot in BotContext is necessary because handle_queued_request needs it and has no Message object. Confirmed only test_bot_handlers.py references BotContext. __init__.py is empty, no exports to update.
+
+**Context**: CONSTRUCTION - Code Generation Unit 5 (Plan Second Review)
+
+---
+
+## Code Generation — Unit 5: Plan Third Review (End-to-End Trace)
+**Timestamp**: 2026-02-14T21:50:00Z
+**User Input**: "Now check it again. It's a very important part of the system itself."
+**AI Response**: Performed end-to-end scenario trace through 9 scenarios against the plan and functional design.
+
+### Scenarios Traced:
+1. Normal message with affinity — ✅ clean
+2. Normal message, pool grows — ✅ clean (spawn-outside-lock with placeholder)
+3. Pool at max, all busy — ✅ enqueue and retry later
+4. Cancel in-flight — ✅ OLD event set in acquire, handler detects and aborts, race conditions handled
+5. Spawn failure during acquire — ✅ placeholder removed, request enqueued for retry
+6. /model with pool — ✅ acquire/release, SQLite-only fallback if busy
+7. Graceful shutdown — found issue (see below)
+8. File message queued then processed — ✅ files persist on disk, workspace_path re-derived
+9. Error before session_id set — ✅ session_id=None initialized before try
+
+### Issue Found:
+**release() after shutdown race condition**: If a handler is streaming when shutdown fires, the slot's client gets killed. Handler catches the error, then finally calls release(). release() checks is_alive() → False → tries self.slots.remove(slot). But shutdown already cleared self.slots. This raises ValueError. Fix: guard with `if slot in self.slots` before remove. Added to Step 1 release() description.
+
+### Noted Observations (no plan changes needed):
+- BR-21 Rule 2 says "return error to user" on spawn failure, but functional design pseudocode enqueues instead. Design is authoritative — enqueue is more user-friendly.
+- /model's acquire() could cancel in-flight prompts as a side effect. Unlikely in practice (users send /model when idle). Acceptable for PoC.
+- Per-thread dedup in queue may leave orphaned downloaded files on disk. Minor, acceptable for PoC.
+
+**Context**: CONSTRUCTION - Code Generation Unit 5 (Plan Third Review)
+
+---
