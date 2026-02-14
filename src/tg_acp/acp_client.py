@@ -243,7 +243,7 @@ class ACPClient:
         """Set the model for a session."""
         await self._send_request("session/set_model", {
             "sessionId": session_id,
-            "model": model,
+            "modelId": model,
         })
         logger.info("Set model to %s for session %s", model, session_id)
 

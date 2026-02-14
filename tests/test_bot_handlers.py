@@ -39,6 +39,7 @@ def _make_message(
 ) -> MagicMock:
     msg = MagicMock()
     msg.text = text
+    msg.caption = None
     msg.message_thread_id = thread_id
     msg.chat.id = chat_id
     msg.from_user.id = user_id
@@ -46,6 +47,15 @@ def _make_message(
     msg.bot = MagicMock()
     msg.bot.send_message_draft = AsyncMock()
     msg.bot.send_message = AsyncMock()
+    # File attachment attributes must be explicitly None
+    # (MagicMock auto-creates truthy attributes, breaking has_file guard)
+    msg.document = None
+    msg.photo = None
+    msg.audio = None
+    msg.voice = None
+    msg.video = None
+    msg.video_note = None
+    msg.sticker = None
     return msg
 
 
@@ -157,7 +167,7 @@ class TestNewSession:
         ctx.client.session_prompt = _fake_prompt_stream
         mock_writer = MagicMock()
         mock_writer.write_chunk = AsyncMock()
-        mock_writer.finalize = AsyncMock()
+        mock_writer.finalize = AsyncMock(return_value=[])
         mock_sw_cls.return_value = mock_writer
         setup(ctx)
 
@@ -187,7 +197,7 @@ class TestExistingSession:
         ctx.client.session_prompt = _fake_prompt_stream
         mock_writer = MagicMock()
         mock_writer.write_chunk = AsyncMock()
-        mock_writer.finalize = AsyncMock()
+        mock_writer.finalize = AsyncMock(return_value=[])
         mock_sw_cls.return_value = mock_writer
         setup(ctx)
 
@@ -212,7 +222,7 @@ class TestExistingSession:
         ctx.client.session_prompt = _fake_prompt_stream
         mock_writer = MagicMock()
         mock_writer.write_chunk = AsyncMock()
-        mock_writer.finalize = AsyncMock()
+        mock_writer.finalize = AsyncMock(return_value=[])
         mock_sw_cls.return_value = mock_writer
         setup(ctx)
 
@@ -255,7 +265,7 @@ class TestClientRespawn:
 
         mock_writer = MagicMock()
         mock_writer.write_chunk = AsyncMock()
-        mock_writer.finalize = AsyncMock()
+        mock_writer.finalize = AsyncMock(return_value=[])
         mock_sw_cls.return_value = mock_writer
         setup(ctx)
 
@@ -289,7 +299,7 @@ class TestPromptError:
         ctx.client.session_prompt = _exploding_prompt
         mock_writer = MagicMock()
         mock_writer.write_chunk = AsyncMock()
-        mock_writer.finalize = AsyncMock()
+        mock_writer.finalize = AsyncMock(return_value=[])
         mock_sw_cls.return_value = mock_writer
         setup(ctx)
 
@@ -313,7 +323,7 @@ class TestPromptError:
         ctx.client.session_prompt = _exploding_prompt
         mock_writer = MagicMock()
         mock_writer.write_chunk = AsyncMock()
-        mock_writer.finalize = AsyncMock()
+        mock_writer.finalize = AsyncMock(return_value=[])
         mock_sw_cls.return_value = mock_writer
         setup(ctx)
 

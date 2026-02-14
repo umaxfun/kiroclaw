@@ -16,24 +16,24 @@
 
 ## Steps
 
-- [ ] Step 1: Create `src/tg_acp/file_handler.py` — C5 FileHandler class with three static/class methods:
+- [x] Step 1: Create `src/tg_acp/file_handler.py` — C5 FileHandler class with three static/class methods:
   - `download_to_workspace(message, workspace_path)` — detect attachment type, extract file_id + filename, download via `bot.download()`, return absolute path
   - `send_file(bot, chat_id, thread_id, file_path, caption)` — send via `bot.send_document()` with FSInputFile
   - `validate_path(file_path, workspace_path)` — resolve paths, check `is_relative_to()`
 
-- [ ] Step 2: Modify `src/tg_acp/stream_writer.py` — Update `finalize()`:
+- [x] Step 2: Modify `src/tg_acp/stream_writer.py` — Update `finalize()`:
   - Add `<send_file>` tag regex: `<send_file\s+path="([^"]+)">(.*?)</send_file>` with `re.DOTALL` flag (BR-15 #2)
   - Parse and strip tags from buffer BEFORE Markdown→HTML conversion, collect `(path, description)` tuples
   - If stripped buffer (after `.strip()`) is empty, skip sendMessage entirely (BR-15 #4)
   - Change return type from `list[str]` to `list[tuple[str, str]]`
 
-- [ ] Step 3: Modify `src/tg_acp/bot_handlers.py` — Add /model command handler:
+- [x] Step 3: Modify `src/tg_acp/bot_handlers.py` — Add /model command handler:
   - Define `AVAILABLE_MODELS` list and `DEFAULT_MODEL`
   - `cmd_model(message)` — guard for from_user + thread_id; no args: display list with ✓ marker; with args: validate against AVAILABLE_MODELS (case-insensitive), store in SQLite, then acquire client_lock → respawn if dead → session_load → session_set_model (try/except: log warning on failure, BR-16 #7); if no session exists, skip ACP call (model applies on next session creation)
   - Decorate with `@router.message(Command("model"))` — placed BETWEEN cmd_start and handle_message (aiogram processes in source order, BR-17 #7)
   - Import `Command` from `aiogram.filters`
 
-- [ ] Step 4: Modify `src/tg_acp/bot_handlers.py` — Extend `handle_message()`:
+- [x] Step 4: Modify `src/tg_acp/bot_handlers.py` — Extend `handle_message()`:
   - Change guard: accept messages with text OR file attachment (not just text)
   - Detect file attachments (document, photo, audio, voice, video, video_note, sticker)
   - Download via `FileHandler.download_to_workspace()` before session/prompt; on failure: log error, send error message to user, return (BR-14 #9)
@@ -41,12 +41,12 @@
   - Process outbound files from `finalize()` return: validate path, check exists, send via FileHandler
   - Missing file retry: one internal retry prompt with new StreamWriter (max once per turn, BR-15 #7–#8)
 
-- [ ] Step 5: Fix existing tests for Unit 4 compatibility:
+- [x] Step 5: Fix existing tests for Unit 4 compatibility:
   - Update `_make_message` helper in `tests/test_bot_handlers.py` to set file attachment attributes (document, photo, audio, voice, video, video_note, sticker, caption) to `None` by default (MagicMock auto-creates truthy attributes, breaking the new `has_file` guard)
   - Update `test_no_text_returns_early` — message with `text=None` and no file attachments should still return early
   - Update all tests that mock `StreamWriter.finalize` — set `return_value=[]` explicitly (Unit 4 iterates over the result; default `AsyncMock()` return is not iterable as `list[tuple]`)
   - Verify all existing tests pass with the new guard and finalize return type
 
-- [ ] Step 6: Run all tests, verify no regressions: `uv run pytest`
+- [x] Step 6: Run all tests, verify no regressions: `uv run pytest`
 
-- [ ] Step 7: Create `aidlc-docs/construction/unit4-file-handling-commands/code/code-summary.md`
+- [x] Step 7: Create `aidlc-docs/construction/unit4-file-handling-commands/code/code-summary.md`

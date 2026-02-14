@@ -25,6 +25,11 @@ NEWLINE_SEARCH_TAIL = 200  # look for newline in last N chars when splitting
 INLINE_TAGS = {"b", "i", "code", "u", "s", "a"}
 BLOCK_TAGS = {"pre", "blockquote"}
 
+# Regex to find <send_file> XML tags emitted by the agent
+_SEND_FILE_RE = re.compile(
+    r'<send_file\s+path="([^"]+)">(.*?)</send_file>', re.DOTALL
+)
+
 # Regex to find HTML open/close tags (non-self-closing)
 _TAG_RE = re.compile(r"<(/?)(\w+)(?:\s[^>]*)?>")
 
@@ -238,10 +243,11 @@ class StreamWriter:
 
         self._last_draft_time = now
 
-    async def finalize(self) -> list[str]:
+    async def finalize(self) -> list[tuple[str, str]]:
         """Send the final message(s) with Markdown→HTML conversion.
 
-        Returns file paths (empty in Unit 3).
+        Parses and strips <send_file> tags before conversion.
+        Returns list of (file_path, description) tuples found in tags.
         """
         if self._cancelled:
             return []
@@ -259,15 +265,29 @@ class StreamWriter:
         except Exception:
             pass
 
+        # Parse <send_file> tags BEFORE Markdown→HTML conversion (BR-15 #1)
+        file_results: list[tuple[str, str]] = []
+        for m in _SEND_FILE_RE.finditer(self._buffer):
+            path = m.group(1)
+            description = m.group(2).strip()
+            file_results.append((path, description or ""))
+
+        # Strip all <send_file> tags from buffer
+        cleaned = _SEND_FILE_RE.sub("", self._buffer).strip()
+
+        # If buffer is only <send_file> tags, skip sendMessage (BR-15 #4)
+        if not cleaned:
+            return file_results
+
         # Convert Markdown → Telegram HTML
         use_html = True
         try:
             if telegram_format is None:
                 raise ImportError("chatgpt-md-converter not installed")
-            final_text = telegram_format(self._buffer)
+            final_text = telegram_format(cleaned)
         except Exception:
             logger.warning("Markdown→HTML conversion failed, falling back to plain text", exc_info=True)
-            final_text = self._buffer
+            final_text = cleaned
             use_html = False
 
         # Split and send
@@ -306,7 +326,7 @@ class StreamWriter:
                 else:
                     logger.error("Failed to send plain text segment", exc_info=True)
 
-        return []
+        return file_results
 
     def cancel(self) -> None:
         """Cancel streaming. Subsequent write_chunk/finalize become no-ops."""

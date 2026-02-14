@@ -4,7 +4,7 @@
 - **Project Name**: tg-acp (Telegram Bot + Kiro CLI ACP Streaming)
 - **Project Type**: Greenfield
 - **Start Date**: 2026-02-13T00:00:00Z
-- **Current Stage**: CONSTRUCTION - Functional Design Unit 4 COMPLETE
+- **Current Stage**: CONSTRUCTION - Code Generation Unit 4 COMPLETE
 
 ## Workspace State
 - **Existing Code**: No (hello.py is a placeholder scaffold)
@@ -32,8 +32,7 @@
 - [ ] NFR Requirements — SKIP
 - [ ] NFR Design — SKIP
 - [ ] Infrastructure Design — SKIP
-- [x] Code Generation — Unit 1 COMPLETE, Unit 2 COMPLETE, Unit 3 COMPLETE
-- [ ] Code Generation — Unit 4 PENDING
+- [x] Code Generation — Unit 1 COMPLETE, Unit 2 COMPLETE, Unit 3 COMPLETE, Unit 4 COMPLETE
 - [ ] Code Generation — Unit 5 PENDING
 - [ ] Build and Test — EXECUTE
 
