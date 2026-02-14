@@ -316,11 +316,49 @@ class ACPClient:
                     # Check if this is a server-initiated request (has "method")
                     # vs a response to one of our requests (no "method")
                     if "method" in msg:
-                        # Server-initiated request — log and ignore for now
+                        method = msg.get("method", "")
                         logger.debug(
                             "Server-initiated request id=%s method=%s",
-                            rid, msg.get("method"),
+                            rid, method,
                         )
+                        # Auto-grant permission requests — agent config controls allowed tools
+                        if method == "session/request_permission":
+                            params = msg.get("params", {})
+                            options = params.get("options", [])
+                            # Pick the allow_once option from the provided options
+                            allow_option = next(
+                                (o for o in options if o.get("kind") == "allow_once"),
+                                None,
+                            )
+                            if allow_option is None and options:
+                                # Fallback: pick any allow option, or first option
+                                allow_option = next(
+                                    (o for o in options if "allow" in o.get("kind", "")),
+                                    options[0],
+                                )
+                            option_id = allow_option["optionId"] if allow_option else "allow-once"
+                            logger.debug(
+                                "Auto-granting permission id=%s optionId=%s",
+                                rid, option_id,
+                            )
+                            await self._send({
+                                "jsonrpc": "2.0",
+                                "id": rid,
+                                "result": {
+                                    "outcome": {
+                                        "outcome": "selected",
+                                        "optionId": option_id,
+                                    }
+                                },
+                            })
+                        else:
+                            # Unknown server request — respond with empty result
+                            await self._send({
+                                "jsonrpc": "2.0",
+                                "id": rid,
+                                "result": {},
+                            })
+                            logger.debug("Responded with empty result for %s id=%s", method, rid)
                         continue
 
                     # Response — route to pending request

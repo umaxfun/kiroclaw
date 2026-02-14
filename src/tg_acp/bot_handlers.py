@@ -61,10 +61,20 @@ async def cmd_start(message: Message) -> None:
 @router.message()
 async def handle_message(message: Message) -> None:
     """Handle text messages — session lookup, ACP prompt, streaming response."""
+    logger.debug(
+        "handle_message: chat_id=%s thread_id=%s from_user=%s text=%r content_type=%s",
+        message.chat.id,
+        message.message_thread_id,
+        message.from_user.id if message.from_user else None,
+        message.text[:80] if message.text else None,
+        message.content_type,
+    )
     if message.text is None or message.from_user is None:
+        logger.debug("Skipping: text=%s from_user=%s", message.text is None, message.from_user is None)
         return
     thread_id = message.message_thread_id
     if thread_id is None:
+        logger.debug("Skipping: no thread_id (not a forum topic message)")
         return
 
     ctx = _get_ctx()
