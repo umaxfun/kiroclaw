@@ -838,3 +838,98 @@ All plan checkboxes marked complete. aidlc-state.md updated.
 **Context**: CONSTRUCTION - Functional Design Unit 3 (Revision)
 
 ---
+
+## Functional Design — Unit 3: Approved
+**Timestamp**: 2026-02-14T13:00:00Z
+**User Input**: "Okay, let's go."
+**AI Response**: Functional design approved. Proceeding to Code Generation for Unit 3.
+**Context**: CONSTRUCTION - Functional Design Unit 3 (Approval)
+
+---
+
+## Code Generation — Unit 3: Plan Created
+**Timestamp**: 2026-02-14T13:05:00Z
+**AI Response**: Created code generation plan with 7 steps. Files to create: stream_writer.py, bot_handlers.py, test_stream_writer.py. Files to modify: main.py, pyproject.toml.
+**Context**: CONSTRUCTION - Code Generation Unit 3 (Part 1 - Plan)
+
+---
+
+## Code Generation — Unit 3: Plan Approved (Implicit)
+**Timestamp**: 2026-02-14T13:10:00Z
+**User Input**: "Hey, let's start the bot itself. I already added the bot token to the .nv file."
+**AI Response**: User's directive to start building. Proceeding to execution.
+**Context**: CONSTRUCTION - Code Generation Unit 3 (Part 1 - Approval)
+
+---
+
+## Code Generation — Unit 3: Execution Complete
+**Timestamp**: 2026-02-14T13:30:00Z
+**AI Response**: Executed all 7 steps of the code generation plan for Unit 3.
+
+### Files Created:
+- `src/tg_acp/stream_writer.py` — C4 StreamWriter
+- `src/tg_acp/bot_handlers.py` — C6 Bot Handlers
+- `tests/test_stream_writer.py` — 13 unit tests
+- `aidlc-docs/construction/unit3-telegram-bot-streaming/code/code-summary.md`
+
+### Files Modified:
+- `main.py` — rewritten as aiogram bot entry point
+- `pyproject.toml` — added aiogram dependency
+- `tests/test_config.py` — fixed dotenv leak (pre-existing bug surfaced by real .env)
+
+### Test Results:
+- 44/44 tests passing (13 new + 31 existing)
+
+**Context**: CONSTRUCTION - Code Generation Unit 3 (Part 2 - Complete)
+
+---
+
+## Code Generation — Unit 3: Bug Fix (Notification Queue Drain Race Condition)
+**Timestamp**: 2026-02-14T17:15:00Z
+**User Input**: "Cool actually it works"
+**AI Response**: Fixed the notification queue pollution bug discovered during live testing. The issue: `session/load` replays the entire conversation history as `session/update` notifications. These accumulated in the notification queue and were consumed by the next `session_prompt`, causing the StreamWriter to concatenate ALL history + new response into one message.
+
+### Fix Applied:
+Dual drain strategy in `src/tg_acp/acp_client.py`:
+1. Drain at the END of `session_load()` — catches the bulk of stale notifications
+2. Drain at the START of `session_prompt()` — catches any stragglers that arrived asynchronously after `session_load` returned (race condition fix)
+
+### Verification:
+- Bot started, tested with existing session (session/load path)
+- Second message in same topic returned only the new response, not concatenated history
+- User confirmed: "Cool actually it works"
+
+**Context**: CONSTRUCTION - Code Generation Unit 3 (Bug Fix - Verified)
+
+---
+
+## Code Generation — Unit 3: Completion Message Presented
+**Timestamp**: 2026-02-14T17:20:00Z
+**User Input**: "Now let's finish this and stop for today."
+**AI Response**: Presenting Unit 3 Code Generation completion message with standardized 2-option format.
+**Context**: CONSTRUCTION - Code Generation Unit 3 (Step 14 - Completion Message)
+
+---
+
+## Code Generation — Unit 3: Agent Steering Fix (Fourth Wall Breaking)
+**Timestamp**: 2026-02-14T17:33:00Z
+**User Input**: "it keeps breaking the wall, the fourth wall" → "i'm working, hooray!"
+**AI Response**: Fixed the agent's self-awareness problem. The kiro-cli agent was mentioning Telegram, CLI, and explaining its own infrastructure to users.
+
+### Root Cause:
+The agent `prompt` field said "You are an AI assistant running inside a Telegram bot" — making the model self-aware about its deployment, which it then leaked to users.
+
+### Fix Applied:
+1. Rewrote `kiro-config/agents/tg-acp.json` prompt — changed from "you are a Telegram bot" to "you are a helpful assistant, never break the fourth wall"
+2. Created `kiro-config/steering/tg-acp-context.md` with `inclusion: manual` front-matter (prevents IDE auto-loading) — contains behavioral rules: never mention infrastructure, platform, Telegram, bots, CLI, terminals, or Kiro
+3. Added `resources` field to agent config pointing to the steering file via `file://{{KIRO_HOME}}/steering/tg-acp-context.md` (template variable resolved by provisioner)
+4. Updated `src/tg_acp/provisioner.py` — added `{{KIRO_HOME}}` template substitution in `.json` files during sync
+
+### Verification:
+- User tested: "Let's make a new thread for English language improvement"
+- Agent responded naturally without mentioning Telegram, bots, or CLI
+- User confirmed: "i'm working, hooray!"
+
+**Context**: CONSTRUCTION - Code Generation Unit 3 (Agent Steering Fix - Verified)
+
+---

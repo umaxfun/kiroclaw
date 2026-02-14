@@ -113,13 +113,18 @@ class WorkspaceProvisioner:
                         entry.unlink()
                     logger.debug("Deleted %s", entry)
 
-        # Copy matching entries from source
+        # Copy matching entries from source (with template substitution for .json)
         if src_dir.is_dir():
             for entry in src_dir.iterdir():
                 if entry.name.startswith(prefix):
                     dst = dst_dir / entry.name
                     if entry.is_dir():
                         shutil.copytree(entry, dst)
+                    elif entry.suffix == ".json":
+                        # Substitute {{KIRO_HOME}} placeholder with actual path
+                        content = entry.read_text()
+                        content = content.replace("{{KIRO_HOME}}", str(self._kiro_home))
+                        dst.write_text(content)
                     else:
                         shutil.copy2(entry, dst)
                     logger.debug("Copied %s -> %s", entry, dst)

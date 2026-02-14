@@ -159,7 +159,21 @@ class ACPClient:
             params["cwd"] = cwd
 
         await self._send_request("session/load", params)
+        self._drain_notifications("after session/load")
         logger.info("Loaded session %s", session_id)
+    def _drain_notifications(self, context: str) -> None:
+        """Discard queued notifications (e.g. stale session/load replays)."""
+        drained = 0
+        while not self._notification_queue.empty():
+            try:
+                self._notification_queue.get_nowait()
+                drained += 1
+            except asyncio.QueueEmpty:
+                break
+        if drained:
+            logger.debug("Drained %d stale notifications (%s)", drained, context)
+
+
 
     async def session_prompt(
         self, session_id: str, content: list[dict]
@@ -174,6 +188,7 @@ class ACPClient:
             raise RuntimeError(f"Cannot prompt in state {self._state}")
 
         self._state = ACPClientState.BUSY
+        self._drain_notifications("before prompt")
 
         # Send the prompt request
         rid = self._next_request_id()

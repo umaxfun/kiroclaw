@@ -20,12 +20,16 @@ def _base_env(**overrides: str) -> dict[str, str]:
     return env
 
 
+# Patch load_dotenv to prevent .env file from leaking into tests
+_no_dotenv = patch("tg_acp.config.load_dotenv")
+
+
 class TestConfigLoad:
     """BR-01: Config validation rules."""
 
     def test_load_valid_defaults(self):
         """Valid .env loads all fields with correct defaults."""
-        with patch.dict(os.environ, _base_env(), clear=True):
+        with _no_dotenv, patch.dict(os.environ, _base_env(), clear=True):
             cfg = Config.load()
         assert cfg.bot_token == "test-token-123"
         assert cfg.kiro_agent_name == "tg-acp"
@@ -44,7 +48,7 @@ class TestConfigLoad:
             LOG_LEVEL="debug",
             KIRO_CONFIG_PATH="/opt/kiro-config/",
         )
-        with patch.dict(os.environ, env, clear=True):
+        with _no_dotenv, patch.dict(os.environ, env, clear=True):
             cfg = Config.load()
         assert cfg.workspace_base_path == "/tmp/ws"
         assert cfg.max_processes == 10
@@ -54,56 +58,56 @@ class TestConfigLoad:
 
     def test_missing_bot_token(self):
         """BR-01.1: BOT_TOKEN must be non-empty."""
-        with patch.dict(os.environ, {"KIRO_AGENT_NAME": "tg-acp"}, clear=True):
+        with _no_dotenv, patch.dict(os.environ, {"KIRO_AGENT_NAME": "tg-acp"}, clear=True):
             with pytest.raises(ValueError, match="BOT_TOKEN is required"):
                 Config.load()
 
     def test_missing_agent_name(self):
         """BR-01.2: KIRO_AGENT_NAME must be non-empty."""
-        with patch.dict(os.environ, {"BOT_TOKEN": "tok"}, clear=True):
+        with _no_dotenv, patch.dict(os.environ, {"BOT_TOKEN": "tok"}, clear=True):
             with pytest.raises(ValueError, match="KIRO_AGENT_NAME is required"):
                 Config.load()
 
     def test_agent_name_too_short(self):
         """BR-01.2: KIRO_AGENT_NAME must be >= 3 chars."""
-        with patch.dict(os.environ, _base_env(KIRO_AGENT_NAME="ab"), clear=True):
+        with _no_dotenv, patch.dict(os.environ, _base_env(KIRO_AGENT_NAME="ab"), clear=True):
             with pytest.raises(ValueError, match=">= 3 characters"):
                 Config.load()
 
     def test_agent_name_invalid_chars(self):
         """BR-01.3: KIRO_AGENT_NAME must match ^[a-zA-Z0-9_-]+$."""
         for bad_name in ["tg.acp", "tg/acp", "tg*acp", "tg acp", "tg@acp"]:
-            with patch.dict(os.environ, _base_env(KIRO_AGENT_NAME=bad_name), clear=True):
+            with _no_dotenv, patch.dict(os.environ, _base_env(KIRO_AGENT_NAME=bad_name), clear=True):
                 with pytest.raises(ValueError, match="must match"):
                     Config.load()
 
     def test_max_processes_not_numeric(self):
         """BR-01.4: MAX_PROCESSES must be a positive integer."""
-        with patch.dict(os.environ, _base_env(MAX_PROCESSES="abc"), clear=True):
+        with _no_dotenv, patch.dict(os.environ, _base_env(MAX_PROCESSES="abc"), clear=True):
             with pytest.raises(ValueError, match="MAX_PROCESSES"):
                 Config.load()
 
     def test_max_processes_zero(self):
         """BR-01.4: MAX_PROCESSES must be >= 1."""
-        with patch.dict(os.environ, _base_env(MAX_PROCESSES="0"), clear=True):
+        with _no_dotenv, patch.dict(os.environ, _base_env(MAX_PROCESSES="0"), clear=True):
             with pytest.raises(ValueError, match="MAX_PROCESSES must be >= 1"):
                 Config.load()
 
     def test_idle_timeout_negative(self):
         """BR-01.5: IDLE_TIMEOUT_SECONDS must be >= 0."""
-        with patch.dict(os.environ, _base_env(IDLE_TIMEOUT_SECONDS="-1"), clear=True):
+        with _no_dotenv, patch.dict(os.environ, _base_env(IDLE_TIMEOUT_SECONDS="-1"), clear=True):
             with pytest.raises(ValueError, match="IDLE_TIMEOUT_SECONDS must be >= 0"):
                 Config.load()
 
     def test_invalid_log_level(self):
         """BR-01.6: LOG_LEVEL must be one of DEBUG, INFO, WARNING, ERROR."""
-        with patch.dict(os.environ, _base_env(LOG_LEVEL="TRACE"), clear=True):
+        with _no_dotenv, patch.dict(os.environ, _base_env(LOG_LEVEL="TRACE"), clear=True):
             with pytest.raises(ValueError, match="LOG_LEVEL"):
                 Config.load()
 
     def test_config_is_frozen(self):
         """BR-01.7: Config is immutable after load."""
-        with patch.dict(os.environ, _base_env(), clear=True):
+        with _no_dotenv, patch.dict(os.environ, _base_env(), clear=True):
             cfg = Config.load()
         with pytest.raises(AttributeError):
             cfg.bot_token = "new-token"  # type: ignore[misc]

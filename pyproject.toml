@@ -5,6 +5,7 @@ description = "Telegram Bot + Kiro CLI ACP Streaming"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "aiogram>=3.25.0",
     "python-dotenv>=1.0.0",
 ]
 
