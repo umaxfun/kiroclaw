@@ -949,3 +949,72 @@ The agent `prompt` field said "You are an AI assistant running inside a Telegram
 **Context**: CONSTRUCTION - Code Generation Unit 3 (Requirements Update for Markdown Support)
 
 ---
+
+
+## Functional Design — Unit 4: File Handling + Commands Started
+**Timestamp**: 2026-02-14T18:00:00Z
+**User Input**: "погнали дальше по процессу"
+**AI Response**: Starting Functional Design for Unit 4. Created plan with 7 steps and 5 questions covering: inbound file prompt format, audio handling, missing outbound file behavior, /model immediate vs deferred application, and file size limits.
+**Context**: CONSTRUCTION - Functional Design Unit 4 (Steps 1-4)
+
+---
+
+## Functional Design — Unit 4: Answers Received and Artifacts Generated
+**Timestamp**: 2026-02-14T18:15:00Z
+**User Input**: "I have responded to everything."
+**AI Response**: Read all 5 answers. Q1: Save file to workspace, reference path in prompt, let agent read via tools (close to C). Q2: Generic — download file, agent decides (A). Q3: D — internal retry prompt to agent if file not found. Q4: B — SQLite + session/set_model immediately. Q5: A — no limits, Telegram decides. No ambiguities detected.
+
+Generated 3 functional design artifacts:
+- domain-entities.md: FileHandler class, file download flow, outbound file tags, missing file retry model, /model command entity, prompt content types
+- business-logic-model.md: FileHandler methods (download_to_workspace, send_file, validate_path), StreamWriter.finalize() extension (parse <send_file> before HTML conversion), cmd_model handler, handle_message extension (file + text, outbound file processing, missing file retry loop)
+- business-rules.md: BR-14 (9 inbound file rules), BR-15 (11 outbound file rules), BR-16 (9 /model command rules), BR-17 (7 extended handler rules), test strategy (10 unit tests, 6 integration tests)
+
+Self-check found and fixed 3 inconsistencies:
+1. component-methods.md C5.send_file: added caption parameter
+2. component-methods.md C4.finalize: return type changed from list[str] to list[tuple[str, str]], added note about parsing <send_file> BEFORE HTML conversion
+3. requirements.md FR-08: added missing file retry behavior documentation
+
+**Context**: CONSTRUCTION - Functional Design Unit 4 (Steps 3-6)
+
+---
+
+## Functional Design — Unit 4: Thorough Self-Check
+**Timestamp**: 2026-02-14T18:30:00Z
+**User Input**: "I'll do another self-check."
+**AI Response**: Performed systematic cross-reference of Unit 4 functional design against all inception docs and current code. 14 checks performed (A through N).
+
+Found and fixed 4 issues:
+1. business-logic-model.md: finalize() header said `list[str]`, corrected to `list[tuple[str, str]]` — inconsistent with body text and component-methods.md
+2. business-logic-model.md: cmd_model was missing thread_id guard (BR-16 rule 9 requires it) — added step 0 with from_user and thread_id checks
+3. business-logic-model.md: download_to_workspace used `bot.download` without clarifying where `bot` comes from — added note that `message.bot` provides the instance
+4. business-logic-model.md: retry prompt in step 11 had no note about client liveness — added clarifying comment that client is guaranteed alive at this point (inside lock, after successful first prompt)
+
+All other checks passed:
+- C5 methods match across all 3 docs and component-methods.md
+- FR-08/FR-09 fully covered by BR-14 through BR-17
+- services.md flow matches handle_message steps
+- /model session_load→session_set_model sequence is correct
+- No double-send risk in retry flow
+- unit-of-work-story-map.md correctly maps FR-08→Unit 4, FR-09→Unit 3+4
+- Current code callers of finalize() identified (bot_handlers.py, tests) — changes expected in Code Generation
+
+**Context**: CONSTRUCTION - Functional Design Unit 4 (Self-Check)
+
+---
+
+---
+
+## Bug Fix: session/request_permission Response Format
+**Timestamp**: 2026-02-14T12:00:00Z
+**User Input**: "I allowed it, I allowed it. Do trying. [...] The system is still blocking the file creation."
+**AI Response**: Identified root cause — permission response format was wrong (`{"granted": true}` instead of ACP spec `{"outcome": {"outcome": "selected", "optionId": "allow-once"}}`). Fixed `_read_stdout` in `acp_client.py` to parse `params.options`, select the `allow_once` option, and respond with correct ACP format. Reverted `LOG_LEVEL` to `INFO`. Updated `FINDINGS.md` with `session/request_permission` protocol documentation.
+**Context**: Critical bug fix — incorrect permission response caused kiro-cli to silently reject all tool calls (readFile, writeFile, etc.), making the agent unable to perform file operations.
+
+---
+
+## Code Generation Planning — Unit 4: File Handling + Commands
+**Timestamp**: 2026-02-14T12:15:00Z
+**AI Response**: Created code generation plan at `aidlc-docs/construction/plans/unit4-file-handling-commands-code-generation-plan.md` with 7 steps: create FileHandler (C5), modify StreamWriter finalize() for `<send_file>` parsing, add /model command, extend handle_message for files + outbound + retry, update main.py registration, run tests, write code summary.
+**Context**: Code Generation Part 1 — Planning. Awaiting user approval.
+
+---

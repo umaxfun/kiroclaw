@@ -71,6 +71,7 @@ All architectural decisions, protocol details, and tech stack choices are docume
 - **Inbound**: Users can send files/documents/audio via Telegram; bot downloads and places them in the thread's workspace directory, then references them in the ACP prompt
 - **Outbound via steering**: The global custom agent's `prompt` field instructs the Kiro agent to emit an XML tag (e.g., `<send_file path="...">description</send_file>`) when it wants to send a file to the user. The bot parses these tags from the agent's response, strips them from the displayed text, and sends the referenced files via Telegram's `sendDocument`
 - Support common file types: text, code, documents, audio, images
+- **Missing file retry**: If the agent emits `<send_file>` but the file doesn't exist, the bot sends an internal follow-up prompt to the agent ("file not found, please check the path") and processes the retry response. At most one retry per turn to prevent infinite loops.
 
 ### FR-09: Bot Commands
 - `/start` — Welcome message explaining the bot

@@ -96,14 +96,15 @@ class StreamWriter:
     async def write_chunk(text: str) -> None
         # Append to buffer, call sendMessageDraft with sliding window (plain text, no parse_mode)
 
-    async def finalize() -> list[str]
+    async def finalize() -> list[tuple[str, str]]
         # Convert buffer from Markdown to Telegram HTML (chatgpt-md-converter)
+        # Parse/strip <send_file> tags BEFORE conversion, collect (path, description) tuples
         # Split HTML with tag-aware splitter:
         #   - Inline tags (<b>, <i>, <code>, <u>, <s>, <a>): backtrack before opening tag
         #   - Block tags (<pre>, <blockquote>): close at split, reopen at next segment
-        # Parse/strip <send_file> tags, send via sendMessage with parse_mode=HTML
+        # Send via sendMessage with parse_mode=HTML
         # If HTML conversion fails, fall back to plain text; if Telegram rejects a segment, retry as plain text
-        # Returns list of file paths found in <send_file> tags
+        # Returns list of (file_path, description) tuples found in <send_file> tags
 
     def cancel() -> None
         # Discard buffer, stop writing
@@ -118,8 +119,8 @@ class FileHandler:
     async def download_to_workspace(message: Message, workspace_path: str) -> str
         # Download file from Telegram message to workspace, return local path
 
-    async def send_file(bot: Bot, chat_id: int, thread_id: int, file_path: str) -> None
-        # Send file from workspace to Telegram thread
+    async def send_file(bot: Bot, chat_id: int, thread_id: int, file_path: str, caption: str | None = None) -> None
+        # Send file from workspace to Telegram thread, with optional caption
 
     def validate_path(file_path: str, workspace_path: str) -> bool
         # Ensure file_path is within workspace boundary

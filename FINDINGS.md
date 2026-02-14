@@ -442,3 +442,83 @@ The docs say `file://` paths in `prompt` resolve relative to the agent config fi
 **Trade-off:**
 - Uses `~/.kiro/` (user-level) instead of workspace-level — affects all kiro-cli sessions on the machine, not just the bot
 - Acceptable for PoC / single-purpose deployment; for multi-tenant production, would need isolation
+
+---
+
+## ACP `session/request_permission` — Tool Call Authorization
+
+Discovered 2026-02-14. Kiro CLI sends `session/request_permission` as a **server-initiated JSON-RPC request** (has both `id` and `method`) before executing tool calls (readFile, writeFile, etc.).
+
+### Problem
+
+If the client doesn't respond, kiro-cli blocks indefinitely waiting for permission — the bot hangs and the agent reports "file operations are being blocked."
+
+### Request Format (Agent → Client)
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "1e1d9423-d751-496d-9107-6749b32bb10c",
+  "method": "session/request_permission",
+  "params": {
+    "sessionId": "sess_abc123",
+    "toolCall": { "toolCallId": "call_001" },
+    "options": [
+      { "optionId": "allow-once", "name": "Allow once", "kind": "allow_once" },
+      { "optionId": "reject-once", "name": "Reject", "kind": "reject_once" }
+    ]
+  }
+}
+```
+
+Note: The `id` is a UUID string (not an integer like our client-initiated requests).
+
+### Response Format (Client → Agent)
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "1e1d9423-d751-496d-9107-6749b32bb10c",
+  "result": {
+    "outcome": {
+      "outcome": "selected",
+      "optionId": "allow-once"
+    }
+  }
+}
+```
+
+The `optionId` must match one of the options from `params.options`. Pick the one with `kind: "allow_once"` to auto-grant.
+
+### Wrong Format (caused "file operations blocked")
+
+```json
+{"jsonrpc": "2.0", "id": "...", "result": {"granted": true}}
+```
+
+This is NOT the ACP spec format. Kiro CLI silently ignores it and treats the tool call as rejected.
+
+### Cancellation
+
+If the prompt turn is cancelled, respond with:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "...",
+  "result": { "outcome": { "outcome": "cancelled" } }
+}
+```
+
+### Permission Option Kinds
+
+| Kind | Description |
+|------|-------------|
+| `allow_once` | Allow this operation only this time |
+| `allow_always` | Allow and remember the choice |
+| `reject_once` | Reject this operation only this time |
+| `reject_always` | Reject and remember the choice |
+
+### Links
+- ACP Tool Calls Spec: https://agentclientprotocol.com/protocol/tool-calls
+- Requesting Permission section: https://agentclientprotocol.com/protocol/tool-calls#requesting-permission
