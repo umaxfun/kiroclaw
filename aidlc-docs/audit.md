@@ -933,3 +933,19 @@ The agent `prompt` field said "You are an AI assistant running inside a Telegram
 **Context**: CONSTRUCTION - Code Generation Unit 3 (Agent Steering Fix - Verified)
 
 ---
+
+## Requirements Update — Markdown Formatting Support
+**Timestamp**: 2026-02-14T17:40:00Z
+**User Input**: "The most pressing one is Markdown. Models tend to speak Markdown, to output Markdown and it gets not formatted at all. Let's research this point, go to some telegram documentation on Telegram Flavored Markdown, go to AIO Gram documentation on sending back Markdown and let's try."
+**AI Response**: Researched Telegram Bot API formatting options (MarkdownV2 vs HTML), aiogram formatting utilities, and third-party libraries. Decision: use `chatgpt-md-converter` library to convert LLM Markdown → Telegram HTML on finalize, send with `parse_mode=HTML`. Drafts stay plain text (partial Markdown would break parsers mid-stream). HTML fallback to plain text on conversion or parse failure.
+
+### Documents Updated:
+- `aidlc-docs/inception/requirements/requirements.md`: FR-03 (added Markdown formatting requirement), NFR-04 (added chatgpt-md-converter to tech stack)
+- `aidlc-docs/construction/unit3-telegram-bot-streaming/functional-design/business-rules.md`: BR-11 rules 13-16 (Markdown conversion, plain text drafts, fallback on failure)
+- `aidlc-docs/construction/unit3-telegram-bot-streaming/functional-design/domain-entities.md`: Updated finalize flow description
+- `aidlc-docs/construction/unit3-telegram-bot-streaming/functional-design/business-logic-model.md`: Updated finalize() pseudocode with HTML conversion + fallback
+- `aidlc-docs/inception/application-design/component-methods.md`: Updated C4 StreamWriter method docs
+
+**Context**: CONSTRUCTION - Code Generation Unit 3 (Requirements Update for Markdown Support)
+
+---

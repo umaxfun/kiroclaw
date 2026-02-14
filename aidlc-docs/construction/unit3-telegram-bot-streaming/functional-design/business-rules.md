@@ -5,7 +5,7 @@
 | # | Rule | Rationale |
 |---|------|-----------|
 | 1 | draft_id is a random positive int, constant for the lifetime of one StreamWriter | Telegram uses draft_id to identify which draft to update |
-| 2 | sendMessageDraft throttled to at most 1 call per 100ms | Avoid Telegram rate limits; chunks arrive faster than needed for visual updates |
+| 2 | sendMessageDraft throttled to at most 1 call per 500ms | Avoid Telegram rate limits; chunks arrive faster than needed for visual updates. On TelegramRetryAfter, back off by the requested duration |
 | 3 | Sliding window size = 4000 chars | Below Telegram's 4096 limit with margin for the "…\n" prefix |
 | 4 | Sliding window prefixed with "…\n" when buffer exceeds window | Signals truncation to the user |
 | 5 | On finalize, check buffer non-empty first, then send draft "…", then sendMessage; draft clears automatically | Avoids orphaned "…" draft when buffer is empty. Telegram clears the draft after sendMessage delivers |
@@ -16,6 +16,10 @@
 | 10 | finalize() returns empty list in Unit 3 | File path extraction deferred to Unit 4 |
 | 11 | sendMessageDraft errors are logged but swallowed | Draft is cosmetic; final sendMessage is what matters. Rate limits or transient errors must not crash the prompt flow |
 | 12 | If buffer is empty on finalize, skip sendMessage | Agent may produce only tool calls with no text output |
+| 13 | On finalize, convert entire buffer to HTML first, then split with tag-aware splitter. Inline tags (`<b>`, `<i>`, `<code>`, `<u>`, `<s>`, `<a>`): backtrack to before the opening tag and split there. Block tags (`<pre>`, `<blockquote>`): close at split point, reopen at next segment. | Converting first ensures formatting is complete. Inline backtracking avoids mid-word formatting breaks. Block close/reopen handles tags that can span thousands of chars where backtracking is impractical. Each segment is valid HTML. |
+| 14 | Drafts are sent as plain text (no parse_mode) | Drafts are ephemeral; partial Markdown would break any parser mid-stream |
+| 15 | If Markdown-to-HTML conversion fails, fall back to plain text for all segments | Malformed Markdown must not prevent message delivery |
+| 16 | If Telegram rejects HTML for a segment, retry that segment as plain text | Safety net for edge cases where converter produces invalid HTML |
 
 ## BR-12: Bot Handler Rules
 

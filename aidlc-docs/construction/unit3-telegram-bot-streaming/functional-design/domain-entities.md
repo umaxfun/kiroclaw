@@ -25,25 +25,36 @@ class StreamWriter:
 
 - `draft_id`: a random positive integer, generated once per StreamWriter instance. Stays constant across all `sendMessageDraft` calls for one response.
 - `sendMessageDraft` is called with the tail of the buffer (sliding window) as chunks arrive.
-- On finalize: send draft with "…" to signal completion, then `sendMessage` with the full response. The draft is automatically cleared by Telegram after `sendMessage` delivers.
+- On finalize: send draft with "…" to signal completion, then convert the full buffer from Markdown to Telegram HTML using `chatgpt-md-converter`, then split the HTML with a tag-aware splitter. Inline tags (`<b>`, `<i>`, `<code>`, `<u>`, `<s>`, `<a>`) are handled by backtracking to before the opening tag. Block tags (`<pre>`, `<blockquote>`) are closed at the split point and reopened at the next segment. Each segment is sent via `sendMessage` with `parse_mode=HTML`. If conversion fails, fall back to plain text. If Telegram rejects HTML for a segment, retry that segment as plain text. The draft is automatically cleared by Telegram after `sendMessage` delivers.
 - On cancel: leave the partial draft visible (no "…" replacement — without a subsequent sendMessage, a "…" draft would persist indefinitely). The draft will be replaced by the next response's draft in the same thread.
 
 ## Message Split Model
 
-When the full response exceeds 4096 characters, it is split into sequential messages:
+When the full response exceeds 4096 characters, it is split into sequential messages.
+The buffer is first converted to HTML, then split with a tag-aware splitter that
+closes unclosed tags at split points and reopens them at the start of the next segment.
 
 ```
-Full response (e.g., 10000 chars)
+Full response (raw Markdown)
     |
-    +---> Message 1: chars [0..4095]      → sendMessage
-    +---> Message 2: chars [4096..8191]   → sendMessage
-    +---> Message 3: chars [8192..9999]   → sendMessage
+    v
+Convert to HTML (one pass via chatgpt-md-converter)
+    |
+    v
+Tag-aware split at 4096-char boundaries
+    |
+    +---> Segment 1: valid HTML (tags closed)     → sendMessage parse_mode=HTML
+    +---> Segment 2: valid HTML (tags reopened)    → sendMessage parse_mode=HTML
+    +---> Segment 3: valid HTML                    → sendMessage parse_mode=HTML
 ```
 
 Split rules:
 - Max 4096 chars per message (Telegram limit)
 - Split on last newline before the 4096 boundary when possible (clean break)
 - If no newline in the last 200 chars, split at exactly 4096 (hard break)
+- At each split point, handle unclosed tags by type:
+  - Inline tags (`<b>`, `<i>`, `<code>`, `<u>`, `<s>`, `<a>`): backtrack to before the opening tag and split there (tag moves intact to next segment)
+  - Block tags (`<pre>`, `<blockquote>`): close at split point, reopen at start of next segment
 - Each segment sent as a separate `sendMessage` call with `message_thread_id`
 - If buffer is empty (agent produced no text), skip sendMessage entirely
 

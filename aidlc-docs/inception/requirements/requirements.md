@@ -36,6 +36,7 @@ All architectural decisions, protocol details, and tech stack choices are docume
 - Sliding window for long responses: if accumulated text exceeds Telegram's 4096 char limit, the draft shows the latest ~4000 characters (sliding window)
 - On turn completion, finalize with `sendMessage` — if the full response exceeds 4096 chars, split into multiple sequential messages
 - Handle `message_thread_id` for forum topic targeting
+- **Markdown formatting**: LLM responses contain standard Markdown (bold, italic, code blocks, lists, etc.). On finalize, convert the entire buffer to Telegram-compatible HTML using `chatgpt-md-converter` library, then split with a tag-aware HTML splitter. Inline tags (`<b>`, `<i>`, `<code>`, `<u>`, `<s>`, `<a>`) are handled by backtracking to before the opening tag and splitting there. Block tags (`<pre>`, `<blockquote>`) are closed at the split point and reopened at the next segment. Each segment is sent with `parse_mode=HTML`. Drafts are sent as plain text (no formatting) since they are ephemeral. If Markdown-to-HTML conversion fails, fall back to plain text. If Telegram rejects HTML for a segment, retry that segment as plain text.
 
 ### FR-04: Process Pool (Scale-to-One)
 - Maintain at least 1 warm `kiro-cli acp` process at all times (scale-to-one)
@@ -148,6 +149,7 @@ All architectural decisions, protocol details, and tech stack choices are docume
 - Python 3.12 (pinned in .python-version)
 - Package manager: uv
 - Bot framework: aiogram (Bot API 9.3+ support)
+- Markdown formatting: chatgpt-md-converter (Markdown → Telegram HTML)
 - Async subprocess: `asyncio.create_subprocess_exec`
 - Config: python-dotenv for .env loading
 

@@ -94,10 +94,15 @@ class StreamWriter:
     def __init__(bot: Bot, chat_id: int, thread_id: int, draft_id: int) -> None
 
     async def write_chunk(text: str) -> None
-        # Append to buffer, call sendMessageDraft with sliding window
+        # Append to buffer, call sendMessageDraft with sliding window (plain text, no parse_mode)
 
     async def finalize() -> list[str]
-        # Parse/strip <send_file> tags, split into messages, send via sendMessage
+        # Convert buffer from Markdown to Telegram HTML (chatgpt-md-converter)
+        # Split HTML with tag-aware splitter:
+        #   - Inline tags (<b>, <i>, <code>, <u>, <s>, <a>): backtrack before opening tag
+        #   - Block tags (<pre>, <blockquote>): close at split, reopen at next segment
+        # Parse/strip <send_file> tags, send via sendMessage with parse_mode=HTML
+        # If HTML conversion fails, fall back to plain text; if Telegram rejects a segment, retry as plain text
         # Returns list of file paths found in <send_file> tags
 
     def cancel() -> None

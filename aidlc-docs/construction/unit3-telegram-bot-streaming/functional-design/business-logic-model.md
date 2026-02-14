@@ -8,9 +8,10 @@
 1. If _cancelled: return immediately (discard chunk)
 2. Append text to _buffer
 3. Compute draft_text = sliding_window(_buffer)
-4. If time since _last_draft_time < DRAFT_THROTTLE_MS: skip sendMessageDraft (throttle)
+4. If time since _last_draft_time < DRAFT_THROTTLE_S: skip sendMessageDraft (throttle)
 5. Try: bot.send_message_draft(chat_id, thread_id, draft_id, draft_text)
-   Except: log warning, continue (draft errors are non-fatal)
+   Except TelegramRetryAfter: set _last_draft_time = now + retry_after (back off)
+   Except other: log warning, continue (draft errors are non-fatal)
 6. Update _last_draft_time
 ```
 
@@ -33,11 +34,29 @@ The "…\n" prefix signals to the user that earlier content is truncated in the 
 1. If _cancelled: return []
 2. If _buffer is empty: return [] (nothing to send, no draft to clear)
 3. Send draft "…" to signal completion (best-effort, swallow errors)
-4. Split _buffer into segments of <=4096 chars (see split rules in domain-entities.md)
-5. For each segment: bot.send_message(chat_id, text=segment, message_thread_id=thread_id)
-6. Return [] (no file paths — file handling is Unit 4)
+4. Try: convert _buffer from Markdown to Telegram HTML using chatgpt-md-converter (telegram_format)
+   Except: use raw _buffer as plain text, skip HTML splitting, send segments without parse_mode
+5. Split HTML into segments of <=4096 chars using tag-aware splitter:
+   - Split at newline boundaries (prefer) or hard break at 4096
+   - At each split point, handle unclosed tags by type:
+     a. INLINE tags (<b>, <i>, <code>, <u>, <s>, <a>):
+        Backtrack to before the opening tag and split there.
+        The tag moves intact to the next segment. Avoids mid-word formatting breaks.
+     b. BLOCK tags (<pre>, <blockquote>):
+        Close the tag at the split point, reopen at the start of the next segment.
+        Block tags can span thousands of chars — backtracking is impractical.
+   - This preserves formatting continuity across segments
+6. For each segment:
+   a. Try: bot.send_message(chat_id, text=segment, message_thread_id=thread_id, parse_mode="HTML")
+   b. If Telegram rejects HTML (parse error): retry same segment as plain text (no parse_mode)
+7. Return [] (no file paths — file handling is Unit 4)
 ```
 
+The entire buffer is converted to HTML in one pass, then split with tag awareness.
+This avoids the problem of splitting raw Markdown (which could break mid-formatting)
+and the problem of splitting HTML naively (which could break mid-tag).
+The tag-aware splitter tracks open tags across split boundaries, ensuring each segment
+is valid HTML that Telegram can parse independently.
 The draft is automatically cleared by Telegram after sendMessage delivers.
 
 Note: In Unit 4, finalize() will parse `<send_file>` tags and return file paths. For Unit 3, it returns an empty list.
@@ -123,20 +142,18 @@ before the next session/load. The single client just switches between sessions.
 Unit 5 replaces this with ProcessPool for true concurrency.
 ```
 
-### Known limitation: notification queue pollution
+### Known limitation: notification queue pollution (RESOLVED)
 
 ```
-The ACP Client's _notification_queue accumulates ALL notifications from kiro-cli,
-not just session/update. Between turns, kiro-cli may send notifications like
-_kiro.dev/commands/available or _kiro.dev/compaction/status. These pile up in the
-queue and are read (and discarded) by the next session_prompt call.
+The ACP Client's _notification_queue accumulated ALL notifications from kiro-cli,
+including session/update history replays from session/load. This was resolved with
+a dual drain strategy:
+  1. Drain at the end of session_load() — catches the bulk of stale notifications
+  2. Drain at the start of session_prompt() — catches stragglers from the async reader
 
-This is harmless — session_prompt only yields session/update notifications and
-ignores others. But it means the first few iterations of the prompt loop may
-process stale notifications before reaching the current session's updates.
-
-A proper fix (draining the queue between turns) is deferred — it's a C1 concern,
-not a C6 concern, and doesn't affect correctness.
+Between turns, kiro-cli may also send non-session notifications like
+_kiro.dev/commands/available or _kiro.dev/compaction/status. These are harmless —
+session_prompt only yields session/update notifications and ignores others.
 ```
 
 ---

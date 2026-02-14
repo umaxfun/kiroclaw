@@ -162,6 +162,15 @@ wheels = [
 ]
 
 [[package]]
+name = "chatgpt-md-converter"
+version = "0.3.12"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/25/92/468287fe5a089b3fc12855b822bdeba5dc1f7c6fe5a1e65e1c35fcbdf39f/chatgpt_md_converter-0.3.12.tar.gz", hash = "sha256:fde9e60130d4c45864f1410b2d1561cb5e11da37cbc9da8973d13c6343afd4b6", size = 24021 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/69/ba/b4c45329885b65ea00bb515dd2fcf8f6e9235200b911302efa803aad298b/chatgpt_md_converter-0.3.12-py3-none-any.whl", hash = "sha256:c5f37d9e4f149647df294709ada5ed74912cd280ff1f09c0d096804bb0cff9ca", size = 17745 },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -634,6 +643,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiogram" },
+    { name = "chatgpt-md-converter" },
     { name = "python-dotenv" },
 ]
 
@@ -647,6 +657,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiogram", specifier = ">=3.25.0" },
+    { name = "chatgpt-md-converter", specifier = ">=0.3.12" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
 ]
 

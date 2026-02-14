@@ -312,13 +312,28 @@ class ACPClient:
                     continue
 
                 if "id" in msg:
-                    # Response — route to pending request
                     rid = msg["id"]
+                    # Check if this is a server-initiated request (has "method")
+                    # vs a response to one of our requests (no "method")
+                    if "method" in msg:
+                        # Server-initiated request — log and ignore for now
+                        logger.debug(
+                            "Server-initiated request id=%s method=%s",
+                            rid, msg.get("method"),
+                        )
+                        continue
+
+                    # Response — route to pending request
                     fut = self._pending.pop(rid, None)
                     if fut and not fut.done():
                         fut.set_result(msg)
                     else:
-                        logger.warning("Unexpected response id=%s", rid)
+                        logger.warning(
+                            "Unexpected response id=%s (pending_ids=%s, msg_keys=%s)",
+                            rid,
+                            list(self._pending.keys()),
+                            list(msg.keys()),
+                        )
                 else:
                     # Notification — queue for consumers
                     await self._notification_queue.put(msg)
