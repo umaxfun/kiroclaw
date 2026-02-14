@@ -794,3 +794,47 @@ All plan checkboxes marked complete. aidlc-state.md updated.
 **Context**: CONSTRUCTION - Code Generation Unit 2 (Part 2 - Complete)
 
 ---
+
+## Functional Design — Unit 3: Telegram Bot with Streaming Started
+**Timestamp**: 2026-02-14T12:00:00Z
+**User Input**: "ok, close and lets move forward"
+**AI Response**: Starting Functional Design for Unit 3. Created plan with 4 steps. No questions needed — all design decisions resolved by FR-01, FR-03, FR-09, C4/C6 method signatures, and unit-of-work.md scope definition.
+**Context**: CONSTRUCTION - Functional Design Unit 3 (Steps 1-4)
+
+---
+
+## Functional Design — Unit 3: Artifacts Generated
+**Timestamp**: 2026-02-14T12:05:00Z
+**AI Response**: Generated 3 functional design artifacts for Unit 3:
+- domain-entities.md: StreamWriter state (buffer, draft_id, throttle, cancelled flag), draft lifecycle (Created→Drafting→Finalized/Cancelled), message split model (4096 char segments with newline-preferred breaks)
+- business-logic-model.md: StreamWriter methods (write_chunk with throttle + sliding window, finalize with draft clear + message split + sendMessage, cancel with draft clear), Bot Handlers (cmd_start, handle_message orchestration with session lookup/create), entry point rewrite (aiogram dispatcher with single ACP Client)
+- business-rules.md: BR-11 (10 stream writer rules), BR-12 (6 bot handler rules), BR-13 (5 sendMessageDraft API rules), test strategy (7 unit tests, 5 integration tests)
+
+Self-check performed: all C4/C6 methods match component-methods.md, FR-01/FR-03/FR-09 fully covered, Unit 4/5 scope correctly excluded. No inconsistencies found.
+
+All plan checkboxes marked complete. aidlc-state.md updated.
+**Context**: CONSTRUCTION - Functional Design Unit 3 (Steps 1-4, Generation + Self-Check)
+
+---
+
+## Functional Design — Unit 3: Self-Review and Fixes
+**Timestamp**: 2026-02-14T12:20:00Z
+**User Input**: "Can you please check it yourself? Find some logic flaws and stuff."
+**AI Response**: Found 6 issues in the functional design. User confirmed fixes for all:
+1. Draft clear via empty string — API requires 1-4096 chars. Fixed: use "…" as minimum content, draft clears automatically after sendMessage.
+2. sendMessageDraft private-chat-only — user confirmed bot is private-chat only, not groups. Removed group concern.
+3. Single client session lock conflict — user clarified: different threads = different session IDs, no conflict. Updated docs to explain why sequential is safe.
+4. sendMessageDraft errors not handled — Fixed: errors logged but swallowed (draft is cosmetic).
+5. Empty buffer on finalize — Fixed: skip sendMessage if buffer is empty.
+6. message.text could be None — Fixed: guard added to handler.
+**Context**: CONSTRUCTION - Functional Design Unit 3 (Self-Review)
+
+---
+
+## Functional Design — Unit 3: Fixes Applied
+**Timestamp**: 2026-02-14T12:25:00Z
+**User Input**: "Number one, if you go to documentation, you can see that the draft is automatically cleared. I believe something like that after you send the final message. So setting the final draft to three dots would be enough.Send message drafts. Yeah, only in private chats because we are only in private chats not in groups so forget.You didn't understand the third one. If it comes to another thread in the same chat or in another chat altogether, it would be a new session with new session ID. It's not a problem. But if it is unclear from the docs, let's update the docs.Number four. Yeah, it's important so we have to fix that.How about 5? Yeah, empty buffer won't be received by Telegram so we shouldn't send it.Number 6, yeah message text couldn't be none. You are right."
+**AI Response**: Updated all 3 functional design artifacts with fixes. Added BR-11 rules 11 (draft error swallowing) and 12 (empty buffer skip). Added unit tests 8 and 9. Updated concurrency model docs to explain why single client is safe.
+**Context**: CONSTRUCTION - Functional Design Unit 3 (Revision)
+
+---
