@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import signal
 from enum import Enum
 from typing import Any, AsyncGenerator
 
@@ -56,6 +58,7 @@ class ACPClient:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            start_new_session=True,  # own process group — so kill() can kill the whole tree
         )
 
         client._stdout_task = asyncio.create_task(client._read_stdout())
@@ -143,12 +146,19 @@ class ACPClient:
         logger.info("Created session %s (cwd=%s)", session_id, cwd)
         return session_id
 
-    async def session_load(self, session_id: str) -> None:
+    async def session_load(self, session_id: str, cwd: str | None = None) -> None:
         """Load an existing session."""
         if self._state != ACPClientState.READY:
             raise RuntimeError(f"Cannot load session in state {self._state}")
 
-        await self._send_request("session/load", {"sessionId": session_id})
+        params: dict = {
+            "sessionId": session_id,
+            "mcpServers": [],
+        }
+        if cwd is not None:
+            params["cwd"] = cwd
+
+        await self._send_request("session/load", params)
         logger.info("Loaded session %s", session_id)
 
     async def session_prompt(
@@ -227,17 +237,28 @@ class ACPClient:
         return self._process is not None and self._process.returncode is None
 
     async def kill(self) -> None:
-        """Terminate the subprocess. Waits up to 5 seconds, then force-kills."""
+        """Terminate the subprocess and all children. Waits up to 5 seconds, then force-kills."""
         if self._process is None:
             return
 
         self._state = ACPClientState.DEAD
 
         try:
-            self._process.terminate()
+            # Kill the entire process group — kiro-cli spawns kiro-cli-chat
+            # as a child, and terminate() only kills the parent, leaving the
+            # child alive (and holding session lock files).
+            pid = self._process.pid
+            try:
+                os.killpg(os.getpgid(pid), signal.SIGTERM)
+            except (ProcessLookupError, PermissionError):
+                self._process.terminate()
+
             await asyncio.wait_for(self._process.wait(), timeout=5.0)
         except asyncio.TimeoutError:
-            self._process.kill()
+            try:
+                os.killpg(os.getpgid(self._process.pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                self._process.kill()
             await self._process.wait()
 
         # Cancel reader tasks

@@ -715,3 +715,82 @@ All other checks passed: ACP Client methods match, state machine consistent, JSO
 **Context**: CONSTRUCTION - Code Generation Unit 1 (Approval)
 
 ---
+
+## Functional Design — Unit 2: Session Persistence Started
+**Timestamp**: 2026-02-14T03:00:00Z
+**User Input**: "Yeah, yeah, yeah. Let's go."
+**AI Response**: Starting Functional Design for Unit 2. Created plan with 4 steps. No questions needed — all design decisions resolved by existing requirements and component design (FR-05, FR-06, C3 methods are fully specified).
+**Context**: CONSTRUCTION - Functional Design Unit 2 (Steps 1-4)
+
+---
+
+## Functional Design — Unit 2: Artifacts Generated
+**Timestamp**: 2026-02-14T03:05:00Z
+**AI Response**: Generated 3 functional design artifacts for Unit 2:
+- domain-entities.md: SessionRecord dataclass, SQLite schema (sessions table with composite PK), workspace directory structure
+- business-logic-model.md: SessionStore methods (init, get_session, upsert_session, set_model, get_model, close), workspace dir creation utility, updated main.py flow with session/load branching
+- business-rules.md: BR-09 (10 session store rules), BR-10 (6 workspace directory rules), test strategy (3 integration tests, 10 unit tests)
+
+Self-check performed: all methods match component-methods.md, FR-05/FR-06 fully covered, unit-of-work.md deliverables addressed. No inconsistencies found.
+
+All plan checkboxes marked complete. aidlc-state.md updated.
+**Context**: CONSTRUCTION - Functional Design Unit 2 (Steps 1-4, Generation + Self-Check)
+
+---
+
+## Functional Design — Unit 2: Approved
+**Timestamp**: 2026-02-14T03:10:00Z
+**User Input**: "Provide yourself, please."
+**AI Response**: Interpreted as approval. Proceeding to Code Generation for Unit 2.
+**Context**: CONSTRUCTION - Functional Design Unit 2 (Approval)
+
+---
+
+## Code Generation — Unit 2: Plan Creation Started
+**Timestamp**: 2026-02-14T03:11:00Z
+**AI Response**: Creating code generation plan for Unit 2: Session Persistence.
+**Context**: CONSTRUCTION - Code Generation Unit 2 (Part 1 - Steps 1-5)
+
+---
+
+## Code Generation — Unit 2: Plan Discussion
+**Timestamp**: 2026-02-14T03:15:00Z
+**User Input**: "Let's make it the following. Like we will pass to the main pi fake telegram user id and fake thread id, like any numbers. And it will create all the required data and stuff. And let's not prompt user for input, let's just create some fake sequence like remember the number 1 2 3 4 something. And after the next step we will ask what the number did you remember."
+**AI Response**: Updated plan and business-logic-model.md: main.py accepts --user-id/--thread-id args (defaults 1/1), no user input prompt. Hardcoded 2-run demo: first run sends "Remember this number: 1234", second run sends "What number did I ask you to remember?" — tests session continuity end-to-end.
+**Context**: CONSTRUCTION - Code Generation Unit 2 (Part 1 - Plan Revision)
+
+---
+
+## Code Generation — Unit 2: Plan Approved (Implicit)
+**Timestamp**: 2026-02-14T03:16:00Z
+**AI Response**: User's feedback was directive (specifying what to build), not requesting further review. Proceeding to execution.
+**Context**: CONSTRUCTION - Code Generation Unit 2 (Part 1 - Approval)
+
+---
+
+## Code Generation — Unit 2: Execution Complete
+**Timestamp**: 2026-02-14T03:30:00Z
+**AI Response**: Executed all 6 steps of the code generation plan for Unit 2.
+
+### Files Created:
+- `src/tg_acp/session_store.py` — C3 Session Store (SessionRecord, CRUD, workspace dir utility)
+- `tests/test_session_store.py` — 10 unit tests
+- `tests/test_session_continuity.py` — 2 integration tests (real kiro-cli)
+- `aidlc-docs/construction/unit2-session-persistence/code/code-summary.md`
+
+### Files Modified:
+- `main.py` — rewritten for Unit 2 (argparse, SessionStore, session/load branching, 2-run demo)
+- `src/tg_acp/acp_client.py` — session_load() accepts cwd, spawn() uses start_new_session, kill() uses killpg
+- `FINDINGS.md` — added session/load params discovery, lock file behavior, process group kill requirement
+
+### Bugs Found and Fixed:
+1. session/load requires mcpServers and cwd fields (same as session/new) — missing fields cause silent parse error
+2. kiro-cli spawns kiro-cli-chat as child — terminate() only kills parent, child holds session lock. Fixed with start_new_session=True + os.killpg()
+
+### Test Results:
+- 38/38 tests passing (26 Unit 1 + 12 Unit 2)
+- Session continuity verified: agent remembers "1234" across process restarts
+
+**Context**: CONSTRUCTION - Code Generation Unit 2 (Part 2 - Complete)
+
+---

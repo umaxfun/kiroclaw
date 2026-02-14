@@ -122,6 +122,11 @@ This means we do NOT need to keep kiro-cli processes alive forever.
 We can spawn a process, do work, let it die, and later spawn a new process
 and call `session/load` with the same session ID to resume.
 
+**IMPORTANT (discovered during Unit 2 implementation)**:
+- `session/load` requires the same params as `session/new`: `{ sessionId, cwd, mcpServers }` — not just `{ sessionId }`. Missing fields cause a silent parse error (no JSON-RPC response, just stderr).
+- kiro-cli uses `.lock` files in `~/.kiro/sessions/cli/` — `session/load` fails with "Session is active in another process (PID ...)" if the lock is held.
+- kiro-cli spawns `kiro-cli-chat` as a child process. `process.terminate()` only kills the parent, leaving the child alive and holding the session lock. Must kill the entire process group (`os.killpg` with `start_new_session=True`).
+
 ### Kiro-specific ACP Extensions
 
 Kiro extends ACP with custom methods prefixed `_kiro.dev/`:
