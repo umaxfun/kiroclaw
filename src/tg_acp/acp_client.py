@@ -209,6 +209,20 @@ class ACPClient:
         while True:
             # Check if the response arrived (non-blocking)
             if future.done():
+                # Drain any notifications that were queued before/alongside
+                # the response — _read_stdout may have processed both
+                # notification lines and the response line in one tick.
+                while not self._notification_queue.empty():
+                    try:
+                        notification = self._notification_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                    method = notification.get("method", "")
+                    if method == "session/update":
+                        params = notification.get("params", {})
+                        update = params.get("update", {})
+                        yield update
+
                 self._state = ACPClientState.READY
                 yield {"sessionUpdate": TURN_END, "content": None}
                 return
@@ -224,13 +238,9 @@ class ACPClient:
                     update = params.get("update", {})
                     yield update
             except asyncio.TimeoutError:
-                # Check again if response arrived
-                if future.done():
-                    self._state = ACPClientState.READY
-                    yield {"sessionUpdate": TURN_END, "content": None}
-                    return
+                # Check again if response arrived (handled at top of loop)
                 # Also check if process died
-                if not self.is_alive():
+                if not future.done() and not self.is_alive():
                     self._state = ACPClientState.DEAD
                     raise RuntimeError("kiro-cli process died during prompt")
 

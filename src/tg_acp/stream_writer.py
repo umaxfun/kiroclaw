@@ -151,11 +151,18 @@ def _split_html(html: str) -> list[str]:
     if len(html) <= MSG_LIMIT:
         return [html]
 
+    # Upper bound: each segment is at least 1 char of real content, plus generous margin
+    max_iterations = (len(html) // MSG_LIMIT) + 10
     segments: list[str] = []
     remaining = html
 
     while remaining:
         if len(remaining) <= MSG_LIMIT:
+            segments.append(remaining)
+            break
+
+        if len(segments) >= max_iterations:
+            logger.warning("_split_html hit iteration cap (%d) — flushing remainder", max_iterations)
             segments.append(remaining)
             break
 

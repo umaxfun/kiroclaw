@@ -33,6 +33,8 @@ class SessionStore:
         self.close()
 
     def __init__(self, db_path: str) -> None:
+        # NOTE: This connection is only safe from the asyncio event loop thread.
+        # If accessed from a thread pool executor, pass check_same_thread=False.
         self._conn = sqlite3.connect(db_path)
         self._conn.row_factory = sqlite3.Row
         self._ensure_schema()

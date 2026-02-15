@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -70,7 +71,7 @@ class RequestQueue:
 
     def __init__(self) -> None:
         self._queue: dict[int, QueuedRequest] = {}
-        self._order: list[int] = []
+        self._order: deque[int] = deque()
 
     def enqueue(self, request: QueuedRequest) -> None:
         """Add request. If thread_id exists, replace (keep FIFO position)."""
@@ -84,19 +85,13 @@ class RequestQueue:
         """Remove and return the oldest request, or None if empty."""
         if not self._order:
             return None
-        thread_id = self._order.pop(0)
+        thread_id = self._order.popleft()
         return self._queue.pop(thread_id)
+
     def requeue_front(self, request: QueuedRequest) -> None:
         """Re-insert a request at the front of the queue (used when handoff fails)."""
         self._queue[request.thread_id] = request
-        self._order.insert(0, request.thread_id)
-
-    def dequeue(self) -> QueuedRequest | None:
-        """Remove and return the oldest request, or None if empty."""
-        if not self._order:
-            return None
-        thread_id = self._order.pop(0)
-        return self._queue.pop(thread_id)
+        self._order.appendleft(request.thread_id)
 
     def __len__(self) -> int:
         return len(self._order)
