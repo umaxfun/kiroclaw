@@ -284,11 +284,20 @@ async def handle_message_internal(
             try:
                 await slot.client.session_load(session_id, cwd=workspace_path)
             except RuntimeError:
-                logger.warning(
-                    "session/load failed for %s — creating new session", session_id,
+                logger.error(
+                    "session/load failed for %s on slot %s — refusing to create "
+                    "new session (would destroy conversation history)",
+                    session_id, slot.slot_id, exc_info=True,
                 )
-                session_id = await slot.client.session_new(cwd=workspace_path)
-                ctx.store.upsert_session(user_id, thread_id, session_id, workspace_path)
+                try:
+                    await bot.send_message(
+                        chat_id,
+                        "Session is temporarily busy. Please try again in a moment.",
+                        message_thread_id=message_thread_id,
+                    )
+                except Exception:
+                    logger.warning("Failed to send session-busy notification")
+                return
 
         # Build prompt content
         if file_paths:

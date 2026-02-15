@@ -88,10 +88,13 @@ class RequestQueue:
         thread_id = self._order.popleft()
         return self._queue.pop(thread_id)
 
-    def requeue_front(self, request: QueuedRequest) -> None:
-        """Re-insert a request at the front of the queue (used when handoff fails)."""
-        self._queue[request.thread_id] = request
-        self._order.appendleft(request.thread_id)
+
+    def dequeue_by_thread(self, thread_id: int) -> QueuedRequest | None:
+        """Remove and return the request for a specific thread, or None."""
+        if thread_id not in self._queue:
+            return None
+        self._order.remove(thread_id)
+        return self._queue.pop(thread_id)
 
     def __len__(self) -> int:
         return len(self._order)
@@ -151,6 +154,10 @@ class ProcessPool:
         self.in_flight: InFlightTracker = InFlightTracker()
         self._lock: asyncio.Lock = asyncio.Lock()
         self._reaper_task: asyncio.Task | None = None
+        # Session affinity: thread_id → slot_id.
+        # Persists across slot reassignment so a thread always returns to the
+        # kiro-cli process that holds its session file lock.
+        self._session_affinity: dict[int, int] = {}
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -192,30 +199,71 @@ class ProcessPool:
     async def acquire(self, thread_id: int, user_id: int) -> ProcessSlot | None:
         """Acquire a process slot. Returns None if pool is at max and all busy.
 
-        Side effects:
-        - Sets the OLD cancel_event if an in-flight request exists for this thread,
-          but ONLY when a slot is actually acquired.  When the pool is full and the
-          caller will enqueue instead, the in-flight stream must keep running.
-        - May spawn a new process (outside the lock) if pool can grow.
+        Session-affinity rules (prevent cross-slot session loading):
+
+        kiro-cli holds an exclusive file lock on the session for the lifetime
+        of the process, even after loading a different session.  Therefore a
+        thread MUST always return to the same kiro-cli process that first
+        created / loaded its session.
+
+        The ``_session_affinity`` dict (thread_id → slot_id) persists this
+        mapping across slot reassignment.  ``slot.thread_id`` tracks which
+        thread is *currently* using the slot (for cancel-in-flight), while
+        ``_session_affinity`` tracks which slot *owns* a thread's session.
+
+        Acquire steps:
+        1. Look up affinity slot for this thread.
+           a. Affinity slot IDLE → use it.
+           b. Affinity slot BUSY → return None (caller enqueues; the slot
+              will pick up the request via release_and_dequeue).
+           c. Affinity slot gone (reaped / crashed) → clear stale affinity,
+              fall through to step 2.
+        2. No affinity → first-time thread or affinity was cleared.
+           a. Grab any IDLE slot, record affinity.
+           b. Spawn new slot if under max, record affinity.
+           c. All busy at max → return None.
         """
         placeholder: ProcessSlot | None = None
 
         async with self._lock:
-            # 1. Affinity: prefer IDLE slot with matching thread_id
-            for slot in self.slots:
-                if slot.status == SlotStatus.IDLE and slot.thread_id == thread_id:
+            # --- Step 1: check existing affinity ---
+            affinity_slot_id = self._session_affinity.get(thread_id)
+            if affinity_slot_id is not None:
+                affinity_slot = next(
+                    (s for s in self.slots if s.slot_id == affinity_slot_id), None,
+                )
+                if affinity_slot is None:
+                    # Slot was reaped or crashed — clear stale affinity
+                    logger.debug(
+                        "[thread=%s] Affinity slot %s gone — clearing",
+                        thread_id, affinity_slot_id,
+                    )
+                    del self._session_affinity[thread_id]
+                elif affinity_slot.status == SlotStatus.IDLE:
+                    # 1a: fast path — reuse affinity slot
                     self._cancel_inflight(thread_id)
-                    slot.status = SlotStatus.BUSY
-                    return slot
+                    affinity_slot.status = SlotStatus.BUSY
+                    affinity_slot.thread_id = thread_id
+                    return affinity_slot
+                else:
+                    # 1b: affinity slot is BUSY — enqueue
+                    logger.debug(
+                        "[thread=%s] Affinity slot %s is busy — will enqueue",
+                        thread_id, affinity_slot.slot_id,
+                    )
+                    return None
 
-            # 2. Any IDLE slot
+            # --- Step 2: no affinity — first-time thread ---
+            # 2a: grab any IDLE slot
             for slot in self.slots:
                 if slot.status == SlotStatus.IDLE:
                     self._cancel_inflight(thread_id)
                     slot.status = SlotStatus.BUSY
+                    slot.thread_id = thread_id
+                    self._session_affinity[thread_id] = slot.slot_id
                     return slot
 
-            # 3. Spawn new process if under max — reserve with placeholder
+            # 2b: spawn new process if under max
             if len(self.slots) < self.max_processes:
                 slot_id = max((s.slot_id for s in self.slots), default=-1) + 1
                 placeholder = ProcessSlot(
@@ -223,8 +271,10 @@ class ProcessPool:
                     client=None,
                     status=SlotStatus.BUSY,
                     last_used=time.time(),
+                    thread_id=thread_id,
                 )
                 self.slots.append(placeholder)
+                self._session_affinity[thread_id] = slot_id
             # Lock released here — spawn happens outside
 
         # Spawn outside lock to avoid blocking all pool operations
@@ -241,9 +291,12 @@ class ProcessPool:
                 async with self._lock:
                     if placeholder in self.slots:
                         self.slots.remove(placeholder)
+                    # Clean up affinity on spawn failure
+                    if self._session_affinity.get(thread_id) == placeholder.slot_id:
+                        del self._session_affinity[thread_id]
                 return None
 
-        # All busy, at max capacity
+        # 2c: all busy, at max capacity
         return None
 
     async def release(
@@ -258,25 +311,49 @@ class ProcessPool:
     ) -> tuple[QueuedRequest | None, ProcessSlot | None]:
         """Atomically release a slot and, if the queue has a request, re-acquire it.
 
+        Affinity-aware dequeue priority:
+        1. A queued request whose _session_affinity points to THIS slot.
+           This keeps the session on the same kiro-cli process.
+        2. The thread that just released (same thread_id) — continuity.
+        3. FIFO fallback — any queued request (first-time threads or
+           threads whose affinity slot was reaped).
+
         Returns (queued_request, slot) — both None if queue was empty or slot crashed.
-        This eliminates the race where another caller steals the slot between
-        release() and the queued handler's acquire().
         """
         async with self._lock:
             self._release_inner(slot, session_id, thread_id)
 
-            next_request = self.request_queue.dequeue()
-            if next_request is None:
-                return None, None
-
             # Slot may have been removed (crash / shutdown) — check before reuse
             if slot not in self.slots or slot.status != SlotStatus.IDLE:
-                # Can't hand off this slot; put the request back at the front
-                self.request_queue.requeue_front(next_request)
+                return None, None
+
+            next_request: QueuedRequest | None = None
+
+            # Priority 1: any queued request with affinity for THIS slot
+            for tid, sid in self._session_affinity.items():
+                if sid == slot.slot_id:
+                    req = self.request_queue.dequeue_by_thread(tid)
+                    if req is not None:
+                        next_request = req
+                        break
+
+            # Priority 2: same thread that just released
+            if next_request is None and thread_id is not None:
+                next_request = self.request_queue.dequeue_by_thread(thread_id)
+
+            # Priority 3: FIFO fallback
+            if next_request is None:
+                next_request = self.request_queue.dequeue()
+
+            if next_request is None:
                 return None, None
 
             # Re-acquire the same slot for the queued request
             slot.status = SlotStatus.BUSY
+            slot.thread_id = next_request.thread_id
+            # Record affinity if this is a first-time thread
+            if next_request.thread_id not in self._session_affinity:
+                self._session_affinity[next_request.thread_id] = slot.slot_id
             # Cancel any in-flight request for the dequeued thread — the queued
             # message is newer and supersedes whatever is still streaming.
             self._cancel_inflight(next_request.thread_id)
@@ -301,11 +378,15 @@ class ProcessPool:
         if slot.client is None or not slot.client.is_alive():
             logger.error("Process slot %s crashed — removing from pool", slot.slot_id)
             self.slots.remove(slot)
+            # Clean up any affinity pointing to this crashed slot
+            stale = [t for t, s in self._session_affinity.items() if s == slot.slot_id]
+            for t in stale:
+                del self._session_affinity[t]
             if thread_id is not None:
                 self.in_flight.untrack(thread_id)
             return
 
-        # Mark idle, update affinity
+        # Mark idle
         slot.status = SlotStatus.IDLE
         slot.last_used = time.time()
         slot.session_id = session_id
@@ -337,6 +418,10 @@ class ProcessPool:
                             to_remove.append(slot)
                     for slot in to_remove:
                         self.slots.remove(slot)
+                        # Clean up affinity for reaped slot
+                        stale = [t for t, s in self._session_affinity.items() if s == slot.slot_id]
+                        for t in stale:
+                            del self._session_affinity[t]
                         logger.info("Reaped idle process slot %s", slot.slot_id)
         except asyncio.CancelledError:
             pass  # Normal shutdown

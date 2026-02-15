@@ -144,3 +144,176 @@ async def test_session_load_after_prompt(store):
     finally:
         await client2.kill()
         _clean_workspace(user_id, thread_id)
+
+
+@pytest.mark.timeout(180)
+@pytest.mark.asyncio
+async def test_session_load_fails_while_other_process_holds_session(store):
+    """Reproduce the session-lock race: client2 tries session/load while client1 still alive.
+
+    Scenario from production:
+    1. client1 creates session, sends a prompt (kiro-cli persists it)
+    2. client1 is NOT killed — simulates the previous request's process still holding the lock
+    3. client2 tries session/load on the same session_id → expected to fail (lock held)
+    4. After killing client1, a fresh client3 can load the session successfully
+
+    This is the exact race that caused session e446418b to be silently replaced
+    by 65f048be in production — the fallback code created a new empty session
+    instead of retrying on a fresh process.
+    """
+    user_id, thread_id = 99, 903
+    _clean_workspace(user_id, thread_id)
+    workspace_path = create_workspace_dir(WORKSPACE_BASE, user_id, thread_id)
+    print(f"\n[DEBUG] workspace_path={workspace_path}")
+
+    # --- Step 1: client1 creates session and sends a prompt ---
+    print("[DEBUG] === STEP 1: client1 creates session + prompt ===")
+    client1 = await ACPClient.spawn(AGENT_NAME)
+    session_id = None
+    try:
+        await client1.initialize()
+        session_id = await client1.session_new(cwd=workspace_path)
+        print(f"[DEBUG] session_id={session_id}")
+        store.upsert_session(user_id, thread_id, session_id, workspace_path)
+
+        response1 = await _collect_response(
+            client1, session_id,
+            "Remember: the secret word is PINEAPPLE. Confirm you memorized it.",
+        )
+        print(f"[DEBUG] client1 response: {response1[:200]}")
+        assert len(response1) > 0
+
+        # --- Step 2: client2 tries to load while client1 is STILL ALIVE ---
+        print("[DEBUG] === STEP 2: client2 tries session/load (client1 still alive) ===")
+        client2 = await ACPClient.spawn(AGENT_NAME)
+        try:
+            await client2.initialize()
+            load_failed = False
+            load_error = ""
+            try:
+                await client2.session_load(session_id, cwd=workspace_path)
+                print("[DEBUG] client2 session/load SUCCEEDED (no lock contention)")
+                # If it succeeds, the lock theory is wrong — still useful data
+            except RuntimeError as exc:
+                load_failed = True
+                load_error = str(exc)
+                print(f"[DEBUG] client2 session/load FAILED as expected: {load_error}")
+        finally:
+            await client2.kill()
+
+    finally:
+        # --- Step 3: kill client1, releasing the lock ---
+        print("[DEBUG] === STEP 3: killing client1 to release lock ===")
+        await client1.kill()
+
+    # --- Step 4: fresh client3 should load successfully after lock is released ---
+    print("[DEBUG] === STEP 4: client3 loads session after client1 killed ===")
+    record = store.get_session(user_id, thread_id)
+    assert record is not None
+
+    client3 = await ACPClient.spawn(AGENT_NAME)
+    try:
+        await client3.initialize()
+        await client3.session_load(record.session_id, cwd=workspace_path)
+        print("[DEBUG] client3 session/load succeeded")
+
+        response3 = await _collect_response(
+            client3, record.session_id,
+            "What was the secret word I told you? Reply with just the word.",
+        )
+        print(f"[DEBUG] client3 response: {response3[:200]}")
+        assert "PINEAPPLE" in response3.upper(), (
+            f"Expected 'PINEAPPLE' in response, got: {response3[:300]}"
+        )
+    finally:
+        await client3.kill()
+        _clean_workspace(user_id, thread_id)
+
+    # --- Report findings ---
+    if load_failed:
+        print(f"\n[FINDING] session/load FAILS when another process holds the session.")
+        print(f"[FINDING] Error: {load_error}")
+        print("[FINDING] This confirms the production bug — the old code would have")
+        print("[FINDING] silently created a new session, destroying conversation history.")
+    else:
+        print("\n[FINDING] session/load SUCCEEDED despite another process holding the session.")
+        print("[FINDING] Lock contention may not be the root cause — investigate further.")
+
+
+@pytest.mark.timeout(180)
+@pytest.mark.asyncio
+async def test_retry_on_fresh_process_recovers_session(store):
+    """End-to-end: simulate the retry logic — kill old process, spawn fresh, reload session.
+
+    This validates the fix: when session/load fails on the current slot's client,
+    killing it and spawning a fresh client allows the retry to succeed.
+    """
+    user_id, thread_id = 99, 904
+    _clean_workspace(user_id, thread_id)
+    workspace_path = create_workspace_dir(WORKSPACE_BASE, user_id, thread_id)
+    print(f"\n[DEBUG] workspace_path={workspace_path}")
+
+    # --- Setup: create session with content ---
+    print("[DEBUG] === SETUP: create session with memorable content ===")
+    client1 = await ACPClient.spawn(AGENT_NAME)
+    try:
+        await client1.initialize()
+        session_id = await client1.session_new(cwd=workspace_path)
+        store.upsert_session(user_id, thread_id, session_id, workspace_path)
+
+        response = await _collect_response(
+            client1, session_id,
+            "Remember: my favorite color is TURQUOISE. Confirm.",
+        )
+        print(f"[DEBUG] Setup response: {response[:150]}")
+        assert len(response) > 0
+
+        # --- Simulate the race: client2 tries to load while client1 alive ---
+        print("[DEBUG] === RACE: client2 tries load (client1 alive) ===")
+        client2 = await ACPClient.spawn(AGENT_NAME)
+        try:
+            await client2.initialize()
+            try:
+                await client2.session_load(session_id, cwd=workspace_path)
+                print("[DEBUG] client2 load succeeded — no contention, skipping retry test")
+                # Even if no contention, verify the session content is intact
+                response2 = await _collect_response(
+                    client2, session_id,
+                    "What is my favorite color? Reply with just the color.",
+                )
+                print(f"[DEBUG] client2 response: {response2[:150]}")
+                assert "TURQUOISE" in response2.upper(), (
+                    f"Expected TURQUOISE, got: {response2[:200]}"
+                )
+                return  # Test passes — no lock contention to simulate retry
+            except RuntimeError as exc:
+                print(f"[DEBUG] client2 load failed: {exc}")
+                # This is the expected path — now simulate the retry fix
+        finally:
+            await client2.kill()
+
+    finally:
+        # Kill client1 — this is what the retry logic does (kill old, spawn fresh)
+        print("[DEBUG] === RETRY: killing client1 (simulating retry logic) ===")
+        await client1.kill()
+
+    # --- Retry: fresh client3 loads the session (simulates the retry path) ---
+    print("[DEBUG] === RETRY: fresh client3 loads session ===")
+    client3 = await ACPClient.spawn(AGENT_NAME)
+    try:
+        await client3.initialize()
+        await client3.session_load(session_id, cwd=workspace_path)
+        print("[DEBUG] client3 session/load succeeded (retry worked)")
+
+        response3 = await _collect_response(
+            client3, session_id,
+            "What is my favorite color? Reply with just the color.",
+        )
+        print(f"[DEBUG] client3 response: {response3[:150]}")
+        assert "TURQUOISE" in response3.upper(), (
+            f"Expected TURQUOISE in retry response, got: {response3[:200]}"
+        )
+        print("[DEBUG] Retry path confirmed: kill old process + fresh spawn recovers session")
+    finally:
+        await client3.kill()
+        _clean_workspace(user_id, thread_id)

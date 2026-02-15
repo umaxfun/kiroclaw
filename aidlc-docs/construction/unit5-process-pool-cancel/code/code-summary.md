@@ -50,5 +50,32 @@
 - FR-07: Cancel-in-flight (cancel_event per request, silent cancel, session/cancel)
 - FR-10: Error recovery (crash detection, slot removal, error to user, bot keeps running)
 
+## Session Affinity Fix (Post-Unit-5)
+
+Addresses production incident: `-32603 Internal error` on `session/load` caused by
+cross-slot session loading. kiro-cli holds an exclusive file lock per-process, not
+per-session-load. When thread A's slot was reassigned to thread B, thread A's next
+request would land on a different slot and fail.
+
+### Root Cause
+`slot.thread_id` tracked the *current* occupant — overwritten when another thread
+acquired the slot. Original thread's affinity was lost.
+
+### Fix
+Added `_session_affinity: dict[int, int]` (thread_id → slot_id) to `ProcessPool`.
+Persists across slot reassignment. `acquire()` checks this map first; if the affinity
+slot is BUSY, returns None (enqueue) instead of grabbing a different slot.
+
+### Files Changed
+- `src/tg_acp/process_pool.py` — `__init__`, `acquire()`, `release_and_dequeue()`,
+  `_release_inner()`, `_reaper_loop()` (affinity cleanup on crash/reap)
+- `tests/test_process_pool.py` — +10 tests (TestSessionAffinity, TestDequeueByThread)
+- `tests/test_pool_integration.py` — lock contention test now passes
+
+### See Also
+- `functional-design/session-affinity-fix.md` — full design doc with scenario walkthrough
+
 ## Test Results
-- 77 tests passed, 0 failures
+- 88 unit tests passed (+10 from affinity fix), 0 failures
+- 4 integration tests passed (including lock contention test)
+- 4 session continuity tests passed

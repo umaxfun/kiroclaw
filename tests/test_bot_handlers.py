@@ -257,15 +257,15 @@ class TestExistingSession:
     @pytest.mark.asyncio
     @patch("tg_acp.bot_handlers.StreamWriter")
     @patch("tg_acp.bot_handlers.create_workspace_dir", return_value="/tmp/ws/1/42")
-    async def test_session_load_failure_creates_new(self, mock_cwd, mock_sw_cls):
-        """If session/load raises, handler falls back to session_new."""
+    async def test_session_load_failure_returns_early_no_data_loss(self, mock_cwd, mock_sw_cls):
+        """If session/load fails, handler tells user to retry — no session_new, no data loss."""
         record = SessionRecord(
             user_id=1, thread_id=42, session_id="stale-sid",
             workspace_path="/tmp/ws/1/42", model="auto",
         )
         ctx, pool, slot, client = _make_ctx(existing_session=record)
         client.session_load.side_effect = RuntimeError("session/load failed")
-        client.session_prompt = _fake_prompt_stream
+
         mock_writer = MagicMock()
         mock_writer.write_chunk = AsyncMock()
         mock_writer.finalize = AsyncMock(return_value=[])
@@ -276,9 +276,18 @@ class TestExistingSession:
         msg = _make_message(user_id=1, thread_id=42)
         await handle_message(msg)
 
-        client.session_new.assert_awaited_once()
-        ctx.store.upsert_session.assert_called_once()
-        mock_writer.finalize.assert_awaited_once()
+        # session_new must NOT be called — that's data loss
+        client.session_new.assert_not_awaited()
+        ctx.store.upsert_session.assert_not_called()
+        # No prompt sent — early return
+        client.session_prompt.assert_not_called()
+        # User notified to try again
+        ctx.bot.send_message.assert_awaited_once()
+        sent_text = ctx.bot.send_message.call_args.kwargs.get(
+            "text", ctx.bot.send_message.call_args[0][1] if len(ctx.bot.send_message.call_args[0]) > 1 else ""
+        )
+        assert "try again" in sent_text.lower()
+        # Slot still released
         pool.release_and_dequeue.assert_awaited_once()
 
 
