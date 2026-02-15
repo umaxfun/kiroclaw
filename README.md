@@ -2,7 +2,22 @@
 
 > ⚠️ **Not suitable for public deployment.** This bot is intended for use by trusted parties only. Security hardening measures are currently underway.
 
-Telegram bot that connects [Kiro CLI](https://kiro.dev/docs/cli/) via the Agent Client Protocol (ACP) to the threaded Telegram bot. Each forum thread gets its own Kiro session with full conversation history, file exchange, and streaming responses.
+Telegram bot that connects [Kiro CLI](https://kiro.dev/docs/cli/) via the Agent Client Protocol (ACP) to a threaded Telegram bot. Each forum thread gets its own Kiro session with full conversation history, file exchange, and streaming responses.
+
+Use cases:
+- On-the-go translation with full conversation memory
+- File analysis — send documents, images, or audio and get structured responses (if you have tools to process them)
+- Coding assistance from your phone — same Kiro agent, just over Telegram
+
+Built-in capabilities (inherited from Kiro CLI's default agent):
+- Upload files to the bot and get processed results back as files or text
+- Bidirectional file exchange — the agent can create and send files to you
+- Add custom skills in the [Agent Skill format](https://agentskills.io/specification)
+- Steering files for shaping agent behavior per deployment
+- Model selection per thread (`/model`) — switch between Claude variants on the fly
+- Full conversation memory within each thread
+
+![](media/screenshot-assistant.png)
 
 ## Prerequisites
 
