@@ -246,9 +246,12 @@ class ProcessPool:
                     affinity_slot.thread_id = thread_id
                     return affinity_slot
                 else:
-                    # 1b: affinity slot is BUSY — enqueue
+                    # 1b: affinity slot is BUSY — cancel in-flight and enqueue
+                    # The handler will detect the cancel event, abort, release
+                    # the slot, and dequeue the replacement request.
+                    self._cancel_inflight(thread_id)
                     logger.debug(
-                        "[thread=%s] Affinity slot %s is busy — will enqueue",
+                        "[thread=%s] Affinity slot %s is busy — cancelling in-flight and will enqueue",
                         thread_id, affinity_slot.slot_id,
                     )
                     return None

@@ -1414,3 +1414,48 @@ Also verified: bot in BotContext is necessary because handle_queued_request need
 **Context**: CONSTRUCTION - Functional Design (Unit 6)
 
 ---
+
+## Session Resumption
+**Timestamp**: 2026-02-15T12:30:00Z
+**User Input**: "go on"
+**AI Response**: Resuming from Unit 6 Functional Design. All 3 artifacts were created (domain-entities.md, business-rules.md, business-logic-model.md) and plan checkboxes are complete. Presenting completion message for user approval.
+**Context**: CONSTRUCTION - Functional Design Unit 6 (Step 7 - Completion Message)
+
+---
+
+## Functional Design — Unit 6: Approved
+**Timestamp**: 2026-02-15T12:31:00Z
+**User Input**: "go"
+**AI Response**: Functional design approved. Proceeding to Code Generation for Unit 6.
+**Context**: CONSTRUCTION - Functional Design Unit 6 (Step 9 - Approval Recorded)
+
+---
+
+## Code Generation — Unit 6: Plan Created
+**Timestamp**: 2026-02-15T12:32:00Z
+**AI Response**: Created code generation plan for Unit 6 (Release Prep). 5 steps: Config allowlist extension, bot handler allowlist gate, tests, .env.example update + README, code summary. Plan saved to aidlc-docs/construction/plans/unit6-release-prep-code-generation-plan.md.
+**Context**: CONSTRUCTION - Code Generation Unit 6 (Part 1 - Planning, Steps 1-6)
+
+---
+
+## Code Generation — Unit 6: Plan Approved
+**Timestamp**: 2026-02-15T12:35:00Z
+**User Input**: "go"
+**AI Response**: Plan approved. Starting Part 2 — Generation. Step 1: Extend Config with allowlist.
+**Context**: CONSTRUCTION - Code Generation Unit 6 (Plan Approved, Starting Generation)
+
+---
+
+## Code Generation — Unit 6: Generation Complete
+**Timestamp**: 2026-02-15T12:45:00Z
+**AI Response**: Completed all 5 steps of the code generation plan:
+
+1. ✅ Modified `src/tg_acp/config.py` — added `allowed_telegram_ids: frozenset[int]`, env var parsing, `is_user_allowed()`, startup warning
+2. ✅ Modified `src/tg_acp/bot_handlers.py` — `_send_access_denied()` helper, allowlist gate in `handle_message`, `cmd_start`, `cmd_model`
+3. ✅ Modified `tests/test_config.py` (8 new tests) + `tests/test_bot_handlers.py` (7 new tests, 1 existing test fixed) — 98/98 pass
+4. ✅ Updated `.env.example`, created `README.md`
+5. ✅ Created code summary at `aidlc-docs/construction/unit6-release-prep/code/code-summary.md`
+
+**Context**: CONSTRUCTION - Code Generation Unit 6 COMPLETE
+
+---

@@ -36,6 +36,7 @@ def _make_config(**overrides: str) -> Config:
         kiro_agent_name="tg-acp",
         log_level="INFO",
         kiro_config_path="./kiro-config/",
+        allowed_telegram_ids=frozenset({1, 2, 3}),
     )
     defaults.update(overrides)
     return Config(**defaults)
@@ -157,7 +158,9 @@ class TestSetupAndContext:
 class TestCmdStart:
     @pytest.mark.asyncio
     async def test_start_replies(self):
-        msg = _make_message()
+        ctx, *_ = _make_ctx()
+        setup(ctx)
+        msg = _make_message(user_id=1)  # user 1 is in allowlist
         await cmd_start(msg)
         msg.answer.assert_awaited_once()
         text = msg.answer.call_args[0][0]
@@ -522,3 +525,150 @@ class TestHandleQueuedRequest:
         await _handle_queued_request(queued, slot)
         # Slot must still be released even on error
         pool.release_and_dequeue.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# Tests: allowlist gate (FR-14)
+# ---------------------------------------------------------------------------
+
+class TestAllowlistDeniedText:
+    """Denied user sends a text message — rejection, no ACP interaction."""
+
+    @pytest.mark.asyncio
+    @patch("tg_acp.bot_handlers.create_workspace_dir", return_value="/tmp/ws/99/42")
+    async def test_denied_user_gets_rejection(self, mock_cwd):
+        ctx, pool, slot, client = _make_ctx()
+        # user_id=99 is NOT in the default allowlist {1, 2, 3}
+        setup(ctx)
+
+        msg = _make_message(user_id=99, thread_id=42)
+        await handle_message(msg)
+
+        msg.answer.assert_awaited_once()
+        text = msg.answer.call_args[0][0]
+        assert "⛔" in text
+        assert "99" in text  # shows their Telegram ID
+        # No ACP interaction
+        pool.acquire.assert_not_awaited()
+        client.session_new.assert_not_awaited()
+
+
+class TestAllowlistDeniedStart:
+    """Denied user sends /start — restricted welcome with their ID."""
+
+    @pytest.mark.asyncio
+    async def test_denied_start_shows_restricted_welcome(self):
+        ctx, pool, slot, client = _make_ctx()
+        setup(ctx)
+
+        msg = _make_message(user_id=99)
+        await cmd_start(msg)
+
+        msg.answer.assert_awaited_once()
+        text = msg.answer.call_args[0][0]
+        assert "Kiro" in text
+        assert "⛔" in text
+        assert "99" in text
+
+    @pytest.mark.asyncio
+    async def test_allowed_start_normal_welcome(self):
+        ctx, pool, slot, client = _make_ctx()
+        setup(ctx)
+
+        msg = _make_message(user_id=1)  # user 1 IS in allowlist
+        await cmd_start(msg)
+
+        msg.answer.assert_awaited_once()
+        text = msg.answer.call_args[0][0]
+        assert "Kiro" in text
+        assert "⛔" not in text
+
+
+class TestAllowlistDeniedModel:
+    """Denied user sends /model — rejection, no model change."""
+
+    @pytest.mark.asyncio
+    async def test_denied_model_gets_rejection(self):
+        ctx, pool, slot, client = _make_ctx()
+        setup(ctx)
+
+        msg = _make_message(user_id=99, thread_id=42)
+        msg.text = "/model auto"
+        from tg_acp.bot_handlers import cmd_model
+        await cmd_model(msg)
+
+        msg.answer.assert_awaited_once()
+        text = msg.answer.call_args[0][0]
+        assert "⛔" in text
+        assert "99" in text
+        # No store interaction
+        ctx.store.set_model.assert_not_called()
+
+
+class TestAllowlistDeniedFile:
+    """Denied user sends a file — rejection, file not downloaded."""
+
+    @pytest.mark.asyncio
+    @patch("tg_acp.bot_handlers.FileHandler")
+    @patch("tg_acp.bot_handlers.create_workspace_dir", return_value="/tmp/ws/99/42")
+    async def test_denied_file_not_downloaded(self, mock_cwd, mock_fh):
+        ctx, pool, slot, client = _make_ctx()
+        setup(ctx)
+
+        msg = _make_message(user_id=99, thread_id=42, text=None)
+        msg.document = MagicMock()  # has a file attachment
+
+        await handle_message(msg)
+
+        msg.answer.assert_awaited_once()
+        text = msg.answer.call_args[0][0]
+        assert "⛔" in text
+        # File NOT downloaded
+        mock_fh.download_to_workspace.assert_not_called()
+        pool.acquire.assert_not_awaited()
+
+
+class TestAllowlistAllowedUnchanged:
+    """Allowed user — normal flow unchanged (regression check)."""
+
+    @pytest.mark.asyncio
+    @patch("tg_acp.bot_handlers.StreamWriter")
+    @patch("tg_acp.bot_handlers.create_workspace_dir", return_value="/tmp/ws/1/42")
+    async def test_allowed_user_normal_flow(self, mock_cwd, mock_sw_cls):
+        ctx, pool, slot, client = _make_ctx(existing_session=None)
+        client.session_prompt = _fake_prompt_stream
+        mock_writer = MagicMock()
+        mock_writer.write_chunk = AsyncMock()
+        mock_writer.finalize = AsyncMock(return_value=[])
+        mock_writer.cancel = MagicMock()
+        mock_sw_cls.return_value = mock_writer
+        setup(ctx)
+
+        msg = _make_message(user_id=1, thread_id=42)  # user 1 IS allowed
+        await handle_message(msg)
+
+        pool.acquire.assert_awaited_once()
+        client.session_new.assert_awaited_once()
+        mock_writer.finalize.assert_awaited_once()
+
+
+class TestAllowlistEmptyDeniesAll:
+    """Empty allowlist — all users denied (fail-closed)."""
+
+    @pytest.mark.asyncio
+    @patch("tg_acp.bot_handlers.create_workspace_dir", return_value="/tmp/ws/1/42")
+    async def test_empty_allowlist_denies_everyone(self, mock_cwd):
+        config = _make_config(allowed_telegram_ids=frozenset())
+        store = MagicMock(spec=SessionStore)
+        bot = MagicMock()
+        pool, slot, client = _make_mock_pool()
+        ctx = BotContext(config=config, store=store, pool=pool, bot=bot)
+        setup(ctx)
+
+        msg = _make_message(user_id=1, thread_id=42)
+        await handle_message(msg)
+
+        msg.answer.assert_awaited_once()
+        text = msg.answer.call_args[0][0]
+        assert "⛔" in text
+        pool.acquire.assert_not_awaited()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import shutil
@@ -10,6 +11,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
 
 AGENT_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 _VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}
@@ -26,6 +28,7 @@ class Config:
     kiro_agent_name: str
     log_level: str
     kiro_config_path: str
+    allowed_telegram_ids: frozenset[int]
 
     @classmethod
     def load(cls) -> Config:
@@ -72,6 +75,25 @@ class Config:
         if idle_timeout_seconds < 0:
             raise ValueError("IDLE_TIMEOUT_SECONDS must be >= 0")
 
+        # Parse ALLOWED_TELEGRAM_IDS: comma-separated ints, empty → frozenset()
+        raw_ids = os.environ.get("ALLOWED_TELEGRAM_IDS", "").strip()
+        if raw_ids:
+            try:
+                allowed_telegram_ids = frozenset(
+                    int(x.strip()) for x in raw_ids.split(",") if x.strip()
+                )
+            except ValueError as e:
+                raise ValueError(
+                    f"ALLOWED_TELEGRAM_IDS must be comma-separated integers, got: {raw_ids!r}"
+                ) from e
+        else:
+            allowed_telegram_ids = frozenset()
+
+        if not allowed_telegram_ids:
+            logger.warning(
+                "ALLOWED_TELEGRAM_IDS is empty — all users will be denied"
+            )
+
         return cls(
             bot_token=bot_token,
             workspace_base_path=os.environ.get(
@@ -84,6 +106,7 @@ class Config:
             kiro_config_path=os.environ.get(
                 "KIRO_CONFIG_PATH", "./kiro-config/"
             ).strip(),
+            allowed_telegram_ids=allowed_telegram_ids,
         )
 
     def validate_kiro_cli(self) -> None:
@@ -117,3 +140,7 @@ class Config:
             raise RuntimeError(
                 f"Workspace directory not writable: {workspace_path} — {e}"
             )
+
+    def is_user_allowed(self, user_id: int) -> bool:
+        """Check if a Telegram user ID is in the allowlist."""
+        return user_id in self.allowed_telegram_ids

@@ -111,3 +111,54 @@ class TestConfigLoad:
             cfg = Config.load()
         with pytest.raises(AttributeError):
             cfg.bot_token = "new-token"  # type: ignore[misc]
+
+
+
+class TestAllowedTelegramIds:
+    """FR-14: ALLOWED_TELEGRAM_IDS parsing and is_user_allowed."""
+
+    def test_comma_separated_ids(self):
+        env = _base_env(ALLOWED_TELEGRAM_IDS="111,222,333")
+        with _no_dotenv, patch.dict(os.environ, env, clear=True):
+            cfg = Config.load()
+        assert cfg.allowed_telegram_ids == frozenset({111, 222, 333})
+
+    def test_whitespace_handling(self):
+        env = _base_env(ALLOWED_TELEGRAM_IDS=" 111 , 222 , 333 ")
+        with _no_dotenv, patch.dict(os.environ, env, clear=True):
+            cfg = Config.load()
+        assert cfg.allowed_telegram_ids == frozenset({111, 222, 333})
+
+    def test_empty_string_returns_empty_frozenset(self):
+        env = _base_env(ALLOWED_TELEGRAM_IDS="")
+        with _no_dotenv, patch.dict(os.environ, env, clear=True):
+            cfg = Config.load()
+        assert cfg.allowed_telegram_ids == frozenset()
+
+    def test_unset_returns_empty_frozenset(self):
+        with _no_dotenv, patch.dict(os.environ, _base_env(), clear=True):
+            cfg = Config.load()
+        assert cfg.allowed_telegram_ids == frozenset()
+
+    def test_non_integer_raises_valueerror(self):
+        env = _base_env(ALLOWED_TELEGRAM_IDS="111,abc,333")
+        with _no_dotenv, patch.dict(os.environ, env, clear=True):
+            with pytest.raises(ValueError, match="comma-separated integers"):
+                Config.load()
+
+    def test_is_user_allowed_true(self):
+        env = _base_env(ALLOWED_TELEGRAM_IDS="42,99")
+        with _no_dotenv, patch.dict(os.environ, env, clear=True):
+            cfg = Config.load()
+        assert cfg.is_user_allowed(42) is True
+
+    def test_is_user_allowed_false(self):
+        env = _base_env(ALLOWED_TELEGRAM_IDS="42,99")
+        with _no_dotenv, patch.dict(os.environ, env, clear=True):
+            cfg = Config.load()
+        assert cfg.is_user_allowed(1) is False
+
+    def test_is_user_allowed_empty_denies_all(self):
+        with _no_dotenv, patch.dict(os.environ, _base_env(), clear=True):
+            cfg = Config.load()
+        assert cfg.is_user_allowed(42) is False

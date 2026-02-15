@@ -74,9 +74,30 @@ def _get_ctx() -> BotContext:
     return _ctx
 
 
+async def _send_access_denied(message: Message, user_id: int) -> None:
+    """Send standardized rejection message with user's Telegram ID."""
+    await message.answer(
+        f"⛔ Access restricted.\n\n"
+        f"Your Telegram ID: {user_id}\n\n"
+        f"To get access, ask the administrator to add your ID to the allowed list."
+    )
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
     """Handle /start command."""
+    ctx = _get_ctx()
+    user_id = message.from_user.id if message.from_user else None
+
+    if user_id is not None and not ctx.config.is_user_allowed(user_id):
+        await message.answer(
+            "I'm a Kiro-powered assistant. Send me a message in any forum topic and I'll respond.\n\n"
+            f"⛔ Your access is currently restricted.\n"
+            f"Your Telegram ID: {user_id}\n"
+            f"To get access, ask the administrator to add your ID to the allowed list."
+        )
+        return
+
     await message.answer(
         "I'm a Kiro-powered assistant. Send me a message in any forum topic and I'll respond.",
     )
@@ -105,6 +126,10 @@ async def cmd_model(message: Message) -> None:
     ctx = _get_ctx()
     user_id = message.from_user.id
     thread_id = message.message_thread_id
+
+    if not ctx.config.is_user_allowed(user_id):
+        await _send_access_denied(message, user_id)
+        return
 
     # Extract args: text after "/model "
     raw = (message.text or "").strip()
@@ -175,7 +200,9 @@ async def handle_message(message: Message) -> None:
         logger.debug("Skipping: no thread_id (not a forum topic message)")
         return
 
-    # Determine content: text, file, or both
+    # Determine content: text, file, or both — before allowlist so service
+    # messages (FORUM_TOPIC_CREATED, etc.) are silently dropped without
+    # triggering a rejection reply.
     has_file = bool(
         message.document or message.photo or message.audio
         or message.voice or message.video or message.video_note
@@ -185,10 +212,16 @@ async def handle_message(message: Message) -> None:
     text_content = message.text or message.caption or ""
 
     if not has_file and not has_text:
-        return  # nothing to process
+        return  # nothing to process (service message)
 
     ctx = _get_ctx()
     user_id = message.from_user.id
+
+    # Allowlist gate — first business logic check after content filter
+    if not ctx.config.is_user_allowed(user_id):
+        await _send_access_denied(message, user_id)
+        return
+
     chat_id = message.chat.id
 
     # Compute workspace path (deterministic, idempotent)

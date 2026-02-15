@@ -36,21 +36,16 @@ def _make_slot(slot_id: int, status: SlotStatus = SlotStatus.IDLE, thread_id: in
 
 
 class TestAcquireCancelRace:
-    """Reproduce: two messages for the same thread when pool is full.
+    """Cancel-previous semantics: when a new message arrives for a thread
+    that already has an in-flight request, the old request must be cancelled
+    even though the slot is busy and the new message gets enqueued.
 
-    Sequence:
-    1. Thread T is in-flight on slot 0, cancel_event_1 is live.
-    2. All slots are BUSY (pool at max).
-    3. A new message for thread T calls acquire() — pool is full, returns None.
-    4. BUG: acquire() sets cancel_event_1 even though it can't provide a slot,
-       truncating the in-flight stream.
-    5. EXPECTED: cancel_event_1 should NOT be set when acquire returns None.
-       The new message gets enqueued and will be processed after the current
-       one finishes via release_and_dequeue.
+    The old handler detects the cancel event, aborts streaming, releases the
+    slot, and release_and_dequeue picks up the queued replacement.
     """
 
     @pytest.mark.asyncio
-    async def test_acquire_does_not_cancel_inflight_when_pool_full(self):
+    async def test_acquire_cancels_inflight_when_affinity_slot_busy(self):
         config = _make_config(max_processes=2)
         pool = ProcessPool(config)
         pool._reaper_task = MagicMock()  # prevent real reaper
@@ -65,14 +60,13 @@ class TestAcquireCancelRace:
         cancel_event = pool.in_flight.track(42, slot0.slot_id)
         assert not cancel_event.is_set(), "precondition: cancel_event starts unset"
 
-        # New message for thread 42 arrives — pool is full
+        # New message for thread 42 arrives — affinity slot is busy
         result = await pool.acquire(42, user_id=1)
 
-        assert result is None, "acquire should return None when pool is full"
-        # THIS IS THE BUG: cancel_event gets set even though no slot was acquired
-        assert not cancel_event.is_set(), (
-            "cancel_event should NOT be set when acquire() returns None — "
-            "the in-flight request should keep streaming"
+        assert result is None, "acquire should return None when affinity slot is busy"
+        assert cancel_event.is_set(), (
+            "cancel_event MUST be set so the old handler aborts and releases "
+            "the slot for the queued replacement"
         )
 
 
