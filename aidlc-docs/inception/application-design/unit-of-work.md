@@ -2,7 +2,7 @@
 
 ## Overview
 
-5 vertical-slice units, each delivering a running system. Built incrementally — each unit extends the previous one.
+6 vertical-slice units, each delivering a running system. Built incrementally — each unit extends the previous one.
 
 | Unit | Name | Components | Delivers |
 |------|------|------------|----------|
@@ -11,6 +11,7 @@
 | 3 | Telegram Bot + Streaming | C6 (partial), C4 | Bot with sendMessageDraft streaming, text only |
 | 4 | File Handling + Commands | C5, C6 (extended), C4 (extended) | Bidirectional files, /model command |
 | 5 | Process Pool + Cancel | C2, C6 (extended) | Multi-process pool, cancel-in-flight, queue |
+| 6 | Release Prep | C6 (extended), C7 (extended) | Telegram ID allowlist, README |
 
 ---
 
@@ -152,6 +153,33 @@
 - Cancel-in-flight: send message while previous is streaming → previous cancelled, new response starts
 - Queue dedup: pool at max, send 3 messages for same thread fast → only latest processed
 - Crash recovery: kill a kiro-cli process mid-stream → pool replaces it, session/load resumes
+
+---
+
+## Unit 6: Release Prep
+
+**Components**: C7 Config (extended), C6 Bot Handlers (extended)
+
+**What it delivers**: The bot from Unit 5, hardened for release:
+1. `ALLOWED_TELEGRAM_IDS` config value — comma-separated list of Telegram user IDs (optional, fail-closed if empty)
+2. Allowlist gate as the first check in message handling (before session lookup or ACP)
+3. Unauthorized users get a friendly message: their Telegram ID + instruction to contact admin
+4. `/start` still works for unauthorized users but notes access is restricted
+5. Comprehensive `README.md` at workspace root
+
+**Project artifacts created**:
+- `README.md` — project documentation for deployment
+
+**What changes from Unit 5**:
+- C7 Config gains `allowed_telegram_ids: list[int]` parsed from comma-separated env var
+- C6 Bot Handlers gains allowlist check as first gate in all handlers (text, file, audio, commands)
+- C6 `/start` handler shows restricted-access variant for unauthorized users
+
+**Test scope**:
+- Allowlist enforcement: allowed user gets normal response, denied user gets rejection with their ID
+- `/start` for unauthorized user: shows welcome but notes restricted access
+- Empty allowlist: all users denied (fail-closed)
+- Config parsing: comma-separated IDs parsed correctly, whitespace handled
 
 ---
 

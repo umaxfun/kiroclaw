@@ -113,6 +113,20 @@ All architectural decisions, protocol details, and tech stack choices are docume
 - Global steering files in `~/.kiro/steering/*.md` are auto-loaded by kiro-cli when using any agent
 - The global config is a project artifact: the `kiro-config/` template directory in the bot's source tree contains the agent JSON, steering files, and skills — synced to `~/.kiro/` on every startup using prefix-based matching (see FR-11 managed scope)
 
+### FR-14: Telegram ID Allowlist
+- Bot maintains a list of allowed Telegram user IDs (configured via `ALLOWED_TELEGRAM_IDS` in `.env`)
+- The env var is optional — empty or unset means nobody is allowed (fail-closed), bot starts normally
+- Only users whose Telegram user ID is in the allowlist receive normal bot functionality
+- Unauthorized users receive a friendly rejection message that includes their Telegram user ID and instructs them to ask the administrator to add it to the allowed list
+- The allowlist check is the first gate in message handling — before session lookup, ACP interaction, or any processing
+- Empty allowlist means nobody is allowed (fail-closed) — this doubles as the self-service flow: deploy, message the bot, get your ID from the rejection, add to `.env`, restart
+- The allowlist applies to all message types (text, files, audio) and commands (except `/start` which should still show a welcome message but note access is restricted)
+
+### FR-15: README Documentation
+- Project includes a comprehensive README.md at workspace root
+- README covers: project description, prerequisites, installation, configuration (.env variables), kiro-config setup, running the bot, bot commands, architecture overview
+- README is a release artifact — written for someone deploying the bot on a new machine
+
 ---
 
 ## Non-Functional Requirements
@@ -128,6 +142,7 @@ All architectural decisions, protocol details, and tech stack choices are docume
   - `KIRO_AGENT_NAME` — REQUIRED, name of the custom global agent
   - `LOG_LEVEL` — logging verbosity for kiro-cli stderr and bot events (default: INFO)
   - `KIRO_CONFIG_PATH` — path to kiro-config/ template directory (default: ./kiro-config/)
+  - `ALLOWED_TELEGRAM_IDS` — comma-separated list of allowed Telegram user IDs (optional, fail-closed if empty or unset — bot starts but rejects all users until IDs are configured)
 
 ### NFR-02: Startup Validation
 - Fail fast on startup if `kiro-cli` is not found on PATH

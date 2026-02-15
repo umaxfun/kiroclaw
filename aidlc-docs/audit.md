@@ -1370,3 +1370,47 @@ Also verified: bot in BotContext is necessary because handle_queued_request need
 **Context**: CONSTRUCTION - Build and Test (Complete)
 
 ---
+
+## Unit 6 Request — User Input
+**Timestamp**: 2026-02-15T12:00:00Z
+**User Input**: "Can you look at the workflow how to create one more unit of work? We need to do some production hardening stuff."
+**AI Response**: Reviewed workflow. Discussed options: lightweight release-prep vs full unit. User clarified scope.
+**Context**: Post-construction — new unit request
+
+---
+
+## Unit 6 Scope Clarification — User Input
+**Timestamp**: 2026-02-15T12:05:00Z
+**User Input**: "Actually I don't want to do too much in one go. And the first and maybe last thing I want to do for going to release for this specific thing is to make a list of allowed Telegram IDs to respond to first. and second is to write a README file. Maybe it doesn't need the whole unit but I don't know how to organize the docs around that."
+**AI Response**: Discussed whether this needs a full unit. User clarified it's not just an env var — the bot should respond with a helpful rejection message showing the user's Telegram ID so they can ask the admin to add them. Agreed to proceed as Unit 6 with lightweight construction loop (Functional Design → Code Generation → Build and Test update).
+**Context**: Post-construction — Unit 6 scope definition
+
+---
+
+## Unit 6 Scope Clarification — Follow-up
+**Timestamp**: 2026-02-15T12:10:00Z
+**User Input**: "Well, it's not only an envvar check. It is some kind of a behavior of the bot. So we will make the bot answer like ask administrator to add your telegram id, this telegram id to the allowed list something like that so it's not like an environment file only but still it's an important piece of functionality. And I really don't get how to do it outside the release, outside the unit loop and what's the place of this inside the whole AI DLC approach."
+**AI Response**: Agreed — this is user-facing behavior with specific UX. Proceeding as Unit 6 within the standard construction loop. Adding FR-14 (Telegram ID Allowlist) to requirements, defining Unit 6 in inception docs, then running Functional Design → Code Generation → Build and Test.
+**Context**: Post-construction — Unit 6 confirmed as full unit
+
+---
+
+## Unit 6 Definition — Created
+**Timestamp**: 2026-02-15T12:15:00Z
+**AI Response**: Added Unit 6 "Release Prep" to inception docs. Changes:
+- requirements.md: Added FR-14 (Telegram ID Allowlist), FR-15 (README Documentation), added ALLOWED_TELEGRAM_IDS to NFR-01
+- unit-of-work.md: Added Unit 6 definition with scope, components (C7 extended, C6 extended), test scope
+- unit-of-work-dependency.md: Added Unit 6 to dependency matrix, build sequence, component timeline, integration points
+- unit-of-work-story-map.md: Mapped FR-14 and FR-15 to Unit 6, updated coverage count
+- aidlc-state.md: Re-opened construction loop for Unit 6
+**Context**: INCEPTION - Units Generation (Unit 6 added to existing unit structure)
+
+---
+
+## Unit 6 Functional Design — Started
+**Timestamp**: 2026-02-15T12:20:00Z
+**User Input**: "go"
+**AI Response**: No questions needed — scope is clear from prior discussion. Created functional design artifacts: domain-entities.md (Config.allowed_telegram_ids field, parsing rules, frozenset for O(1) lookup), business-rules.md (5 rules: allowlist gate, rejection message, /start restricted variant, fail-closed, README content), business-logic-model.md (handler flow diagrams, implementation approach, test strategy). Skipped question phase per adaptive workflow — all ambiguities resolved in prior conversation.
+**Context**: CONSTRUCTION - Functional Design (Unit 6)
+
+---

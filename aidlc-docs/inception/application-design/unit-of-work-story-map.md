@@ -19,6 +19,8 @@ User Stories stage was skipped. This document maps functional and non-functional
 | FR-11 | Custom Agent Support (global ~/.kiro/agents/) | 1 |
 | FR-12 | Subagent Support (agent config provisioning) | 1 |
 | FR-13 | Skills Support (kiro-config/ template provisioning) | 1 |
+| FR-14 | Telegram ID Allowlist (authorized access gate) | 6 |
+| FR-15 | README Documentation (release artifact) | 6 |
 
 ## Non-Functional Requirements → Units
 
@@ -32,4 +34,4 @@ User Stories stage was skipped. This document maps functional and non-functional
 
 ## Coverage Check
 
-All 13 functional requirements and 5 non-functional requirements are assigned to at least one unit. No orphaned requirements.
+All 15 functional requirements and 5 non-functional requirements are assigned to at least one unit. No orphaned requirements.
