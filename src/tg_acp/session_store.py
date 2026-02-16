@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+
+from tg_acp.session_security import validate_session_ownership
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -40,25 +45,53 @@ class SessionStore:
         self._ensure_schema()
 
     def get_session(self, user_id: int, thread_id: int) -> SessionRecord | None:
-        """Lookup session by (user_id, thread_id). Returns None if not found."""
+        """Lookup session by (user_id, thread_id). Returns None if not found.
+        
+        Validates session ownership - ensures session_id contains user_id prefix.
+        """
         row = self._conn.execute(
             "SELECT * FROM sessions WHERE user_id = ? AND thread_id = ?",
             (user_id, thread_id),
         ).fetchone()
         if row is None:
             return None
-        return SessionRecord(
+        
+        record = SessionRecord(
             user_id=row["user_id"],
             thread_id=row["thread_id"],
             session_id=row["session_id"],
             workspace_path=row["workspace_path"],
             model=row["model"],
         )
+        
+        # Validate session ownership
+        if not validate_session_ownership(record.session_id, user_id):
+            logger.error(
+                "Session ownership violation detected: session=%s expected_user=%s",
+                record.session_id, user_id
+            )
+            # Return None to force session recreation with proper ownership
+            return None
+        
+        return record
 
     def upsert_session(
         self, user_id: int, thread_id: int, session_id: str, workspace_path: str
     ) -> None:
-        """Create or replace session mapping. Resets model to 'auto' on replace."""
+        """Create or replace session mapping. Resets model to 'auto' on replace.
+        
+        Validates session_id contains user_id prefix for security.
+        """
+        # Validate session ownership before storing
+        if not validate_session_ownership(session_id, user_id):
+            logger.error(
+                "Attempted to store session with wrong ownership: session=%s user=%s",
+                session_id, user_id
+            )
+            raise ValueError(
+                f"Session ID must contain user prefix: expected 'user-{user_id}-', got '{session_id}'"
+            )
+        
         now = _now_iso()
         self._conn.execute(
             """INSERT INTO sessions

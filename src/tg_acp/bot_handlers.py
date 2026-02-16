@@ -15,6 +15,7 @@ from tg_acp.config import Config
 from tg_acp.file_handler import FileHandler
 from tg_acp.process_pool import ProcessPool, ProcessSlot, QueuedRequest
 from tg_acp.session_store import SessionStore, create_workspace_dir
+from tg_acp.session_security import wrap_session_id, unwrap_session_id
 from tg_acp.stream_writer import StreamWriter
 
 logger = logging.getLogger(__name__)
@@ -163,8 +164,10 @@ async def cmd_model(message: Message) -> None:
         slot = await ctx.pool.acquire(thread_id, user_id)
         if slot is not None:
             try:
-                await slot.client.session_load(record.session_id, cwd=record.workspace_path)
-                await slot.client.session_set_model(record.session_id, model_name)
+                # Unwrap session ID for kiro-cli
+                raw_session_id = unwrap_session_id(record.session_id)
+                await slot.client.session_load(raw_session_id, cwd=record.workspace_path)
+                await slot.client.session_set_model(raw_session_id, model_name)
             except Exception:
                 logger.warning(
                     "session/set_model failed for %s — model stored in SQLite, will apply on next load",
@@ -300,7 +303,8 @@ async def handle_message_internal(
     # Track in-flight (NEW cancel_event for this request)
     cancel_event = ctx.pool.in_flight.track(thread_id, slot.slot_id)
 
-    session_id: str | None = None
+    wrapped_session_id: str | None = None
+    raw_session_id: str | None = None
     file_results: list[tuple[str, str]] = []
     # NOTE: This try/finally MUST only wrap code that runs after a slot is
     # acquired.  The early-return path (pool full → enqueue) exits before
@@ -310,17 +314,22 @@ async def handle_message_internal(
         record = ctx.store.get_session(user_id, thread_id)
 
         if record is None:
-            session_id = await slot.client.session_new(cwd=workspace_path)
-            ctx.store.upsert_session(user_id, thread_id, session_id, workspace_path)
+            # Create new session - kiro-cli returns raw session ID
+            raw_session_id = await slot.client.session_new(cwd=workspace_path)
+            # Wrap it with user prefix before storing
+            wrapped_session_id = wrap_session_id(raw_session_id, user_id)
+            ctx.store.upsert_session(user_id, thread_id, wrapped_session_id, workspace_path)
         else:
-            session_id = record.session_id
+            # Load existing session - unwrap to get raw ID for kiro-cli
+            wrapped_session_id = record.session_id
+            raw_session_id = unwrap_session_id(wrapped_session_id)
             try:
-                await slot.client.session_load(session_id, cwd=workspace_path)
+                await slot.client.session_load(raw_session_id, cwd=workspace_path)
             except RuntimeError:
                 logger.error(
                     "session/load failed for %s on slot %s — refusing to create "
                     "new session (would destroy conversation history)",
-                    session_id, slot.slot_id, exc_info=True,
+                    wrapped_session_id, slot.slot_id, exc_info=True,
                 )
                 try:
                     await bot.send_message(
@@ -347,10 +356,11 @@ async def handle_message_internal(
         cancelled = False
 
         try:
-            async for update in slot.client.session_prompt(session_id, content):
+            # Use raw session ID when communicating with kiro-cli
+            async for update in slot.client.session_prompt(raw_session_id, content):
                 if cancel_event.is_set():
                     logger.info("[thread=%s slot=%s] Cancel event set — aborting stream", thread_id, slot.slot_id)
-                    await slot.client.session_cancel(session_id)
+                    await slot.client.session_cancel(raw_session_id)
                     writer.cancel()
                     cancelled = True
                     break
@@ -418,12 +428,13 @@ async def handle_message_internal(
             retry_cancelled = False
             try:
                 retry_file_results: list[tuple[str, str]] = []
+                # Use raw session ID when communicating with kiro-cli
                 async for update in slot.client.session_prompt(
-                    session_id,
+                    raw_session_id,
                     [{"type": "text", "text": retry_prompt}],
                 ):
                     if cancel_event.is_set():
-                        await slot.client.session_cancel(session_id)
+                        await slot.client.session_cancel(raw_session_id)
                         writer2.cancel()
                         retry_cancelled = True
                         break
@@ -460,8 +471,9 @@ async def handle_message_internal(
     finally:
         # Atomically release slot and grab next queued request (no race)
         logger.info("[thread=%s slot=%s] Releasing slot", thread_id, slot.slot_id)
+        # Pass wrapped session ID for tracking
         next_request, handoff_slot = await ctx.pool.release_and_dequeue(
-            slot, session_id, thread_id,
+            slot, wrapped_session_id, thread_id,
         )
         if next_request is not None and handoff_slot is not None:
             logger.info(
