@@ -108,20 +108,30 @@ def _open_tags_at(html: str) -> list[tuple[str, int]]:
 
     Assumes well-formed (properly nested) HTML, as produced by chatgpt-md-converter.
     Misnested tags like ``<b><i></b></i>`` are not handled.
+    
+    Returns empty list if HTML parsing fails or appears malformed.
     """
-    stack: list[tuple[str, int]] = []
-    for m in _TAG_RE.finditer(html):
-        is_close = m.group(1) == "/"
-        tag_name = m.group(2).lower()
-        if tag_name not in INLINE_TAGS and tag_name not in BLOCK_TAGS:
-            continue
-        if is_close:
-            # Pop matching open tag (if any)
-            if stack and stack[-1][0] == tag_name:
-                stack.pop()
-        else:
-            stack.append((tag_name, m.start()))
-    return stack
+    try:
+        stack: list[tuple[str, int]] = []
+        for m in _TAG_RE.finditer(html):
+            is_close = m.group(1) == "/"
+            tag_name = m.group(2).lower()
+            if tag_name not in INLINE_TAGS and tag_name not in BLOCK_TAGS:
+                continue
+            if is_close:
+                # Pop matching open tag (if any)
+                if stack and stack[-1][0] == tag_name:
+                    stack.pop()
+                else:
+                    # Malformed HTML: mismatched closing tag
+                    logger.warning("Malformed HTML: mismatched closing tag <%s>", tag_name)
+                    return []
+            else:
+                stack.append((tag_name, m.start()))
+        return stack
+    except Exception as e:
+        logger.warning("Error parsing HTML tags: %s", e)
+        return []
 
 
 def _close_tags(open_tags: list[tuple[str, int]]) -> str:

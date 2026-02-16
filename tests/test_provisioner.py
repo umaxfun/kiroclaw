@@ -42,6 +42,7 @@ def _make_config(template: Path, agent_name: str = "tg-acp") -> Config:
         kiro_agent_name=agent_name,
         log_level="INFO",
         kiro_config_path=str(template),
+        allowed_telegram_ids=frozenset([123456]),
     )
 
 
