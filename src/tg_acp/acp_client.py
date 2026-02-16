@@ -291,11 +291,18 @@ class ACPClient:
             if task and not task.done():
                 task.cancel()
 
-        # Resolve any pending futures
+        # Resolve any pending futures and clear notification queue to prevent memory leak
         for fut in self._pending.values():
             if not fut.done():
                 fut.set_exception(RuntimeError("Process killed"))
         self._pending.clear()
+        
+        # Clear notification queue to prevent memory leak
+        while not self._notification_queue.empty():
+            try:
+                self._notification_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
 
         logger.info("Killed kiro-cli process")
 
@@ -393,13 +400,20 @@ class ACPClient:
         except asyncio.CancelledError:
             pass
         finally:
-            # Process died — transition to DEAD
+            # Process died — transition to DEAD and clean up
             if self._state != ACPClientState.DEAD:
                 self._state = ACPClientState.DEAD
                 for fut in self._pending.values():
                     if not fut.done():
                         fut.set_exception(RuntimeError("Process stdout closed"))
                 self._pending.clear()
+                
+                # Clear notification queue to prevent memory leak
+                while not self._notification_queue.empty():
+                    try:
+                        self._notification_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
 
     async def _read_stderr(self) -> None:
         """Read stderr lines and log them."""

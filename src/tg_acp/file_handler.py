@@ -54,7 +54,8 @@ class FileHandler:
 
         destination = Path(workspace_path) / filename
         bot = message.bot
-        assert bot is not None, "Message has no bot instance"
+        if bot is None:
+            raise ValueError("Message has no bot instance")
         await bot.download(file_id, destination=destination)
 
         resolved = str(destination.resolve())
@@ -82,7 +83,16 @@ class FileHandler:
         """Ensure file_path resolves to a location within workspace_path.
 
         Prevents path traversal attacks (e.g., ../../etc/passwd).
+        Resolves symlinks and checks for path components like '..'.
         """
-        resolved = Path(file_path).resolve()
-        workspace_resolved = Path(workspace_path).resolve()
-        return resolved.is_relative_to(workspace_resolved)
+        try:
+            # Resolve both paths to their canonical forms (following symlinks)
+            resolved = Path(file_path).resolve(strict=False)
+            workspace_resolved = Path(workspace_path).resolve(strict=False)
+            
+            # Check if resolved path is within workspace
+            # This handles symlinks and .. components correctly
+            return resolved.is_relative_to(workspace_resolved)
+        except (ValueError, OSError):
+            # Invalid path or resolution error
+            return False

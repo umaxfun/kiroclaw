@@ -468,11 +468,19 @@ async def handle_message_internal(
                 "[thread=%s] Dequeued next request for thread=%s on slot=%s",
                 thread_id, next_request.thread_id, handoff_slot.slot_id,
             )
-            task = asyncio.create_task(
-                _handle_queued_request(next_request, handoff_slot),
-            )
-            _background_tasks.add(task)
-            task.add_done_callback(_background_tasks.discard)
+            try:
+                task = asyncio.create_task(
+                    _handle_queued_request(next_request, handoff_slot),
+                )
+                _background_tasks.add(task)
+                task.add_done_callback(_background_tasks.discard)
+            except Exception as e:
+                # Task creation failed - release the slot and log error
+                logger.error(
+                    "[thread=%s] Failed to create background task for queued request: %s",
+                    next_request.thread_id, e
+                )
+                await ctx.pool.release(handoff_slot, next_request.session_id, next_request.thread_id)
 
 
 async def _handle_queued_request(request: QueuedRequest, slot: ProcessSlot) -> None:
