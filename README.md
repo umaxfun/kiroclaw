@@ -111,3 +111,22 @@ Telegram ──> Bot Handlers (C6)
 ```
 
 Each forum thread maps to one Kiro session. The process pool manages kiro-cli instances with thread affinity, idle reaping, and request queuing when all slots are busy.
+
+## Future Enhancements
+
+### Per-User Add-on Installation (Proposed)
+
+A comprehensive architectural proposal has been created to enable per-user add-on installation using the KiroHub registry. This would allow users to:
+
+- Search and install add-ons directly from chat (`/addon search`, `/addon install`)
+- Manage their own personalized toolset without admin intervention
+- Access hundreds of add-ons from the KiroHub marketplace
+
+**Documentation:**
+- 📋 [Executive Summary](docs/ADDON_EXECUTIVE_SUMMARY.md) - Overview and business case
+- 🏗️ [Architecture Proposal](ADDON_ARCHITECTURE_PROPOSAL.md) - Detailed design and alternatives
+- 🔧 [Technical Specification](docs/PER_USER_ADDONS_TECHNICAL_SPEC.md) - Implementation details
+- 📊 [Architecture Diagrams](docs/ADDON_ARCHITECTURE_DIAGRAMS.md) - Visual overview
+- ✅ [Implementation Guide](docs/ADDON_IMPLEMENTATION_GUIDE.md) - Step-by-step checklist
+
+**Status:** Design complete, ready for implementation (Est. 10-12 days)
