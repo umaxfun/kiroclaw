@@ -1,8 +1,55 @@
 # Multi-User Security Hardening Proposal
 
+> **⚠️ IMPORTANT**: This proposal describes **application-layer isolation only**, which is insufficient for untrusted users with coding tool access. See [CONTAINER_ISOLATION_PROPOSAL.md](CONTAINER_ISOLATION_PROPOSAL.md) for true kernel-level isolation via containers.
+
 ## Executive Summary
 
-This document proposes security enhancements to make KiroClaw safe for multi-user deployments by implementing per-user Kiro-cli session isolation. The current architecture shares Kiro-cli sessions and workspace state across users, creating security and privacy risks. This proposal outlines changes to enforce strict per-user isolation.
+This document proposes security enhancements to make KiroClaw safer for **trusted multi-user deployments** by implementing per-user Kiro-cli session isolation at the application layer. 
+
+**Critical Limitation**: These protections **do not prevent** users with coding tool access (Python, bash, etc.) from directly accessing the filesystem and bypassing all application-layer validation. For untrusted users, container-based isolation is required.
+
+## Understanding the Security Boundary
+
+### What Application-Layer Isolation Protects Against
+
+✅ **Accidental cross-user access** through the application API
+✅ **Programming errors** in the application that might leak data
+✅ **Session enumeration** through the application interface
+✅ **Process memory leakage** between users at the application level
+
+### What It Does NOT Protect Against
+
+❌ **Direct filesystem access** via Python, bash, or other tools
+❌ **Intentional data exfiltration** by malicious users
+❌ **Privilege escalation** attacks
+❌ **Resource exhaustion** (DoS) attacks
+
+### Example Bypass
+
+Any user can bypass application-layer isolation:
+
+```python
+# User can read other users' sessions directly
+import os
+import json
+
+for root, dirs, files in os.walk('/home/user/.kiro/sessions/cli'):
+    for file in files:
+        if file.endswith('.json'):
+            with open(os.path.join(root, file)) as f:
+                print(f"Found session: {f.read()}")
+
+# User can access other users' workspaces
+for user_dir in os.listdir('./workspaces'):
+    print(f"User {user_dir}'s files:")
+    for thread_dir in os.listdir(f'./workspaces/{user_dir}'):
+        for file in os.listdir(f'./workspaces/{user_dir}/{thread_dir}'):
+            print(f"  - {file}")
+```
+
+**Conclusion**: Application-layer isolation is a **defense against accidents**, not a defense against malicious users.
+
+---
 
 ## Current Security Issues
 

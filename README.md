@@ -1,6 +1,6 @@
 # KiroClaw
 
-> ✅ **Multi-user security hardening complete.** This bot now implements per-user session isolation with defense-in-depth protections. See [Security](#security) section for details.
+> ⚠️ **Security Note**: This bot is not suitable for untrusted multi-user deployments. Users with coding tool access can bypass application-layer isolation. See [CONTAINER_ISOLATION_PROPOSAL.md](CONTAINER_ISOLATION_PROPOSAL.md) for true isolation via containers.
 
 Telegram bot that connects [Kiro CLI](https://kiro.dev/docs/cli/) via the Agent Client Protocol (ACP) to a threaded Telegram bot. Each forum thread gets its own Kiro session with full conversation history, file exchange, and streaming responses.
 
@@ -115,20 +115,35 @@ Each forum thread maps to one Kiro session. The process pool manages kiro-cli in
 
 ## Security
 
-KiroClaw implements defense-in-depth security for multi-user deployments. See [SECURITY_PROPOSAL.md](SECURITY_PROPOSAL.md) for the complete security architecture.
+### ⚠️ Critical Security Limitation
 
-### Multi-User Isolation
+**The current application-layer isolation is NOT sufficient for untrusted multi-user deployments.**
 
-**Per-User Session IDs**: All session IDs are prefixed with `user-{telegram_user_id}-` to prevent cross-user access. The SessionStore validates ownership on every operation.
+Users with coding tool access (Python, bash, etc.) can bypass all application-layer protections:
 
-**Process Pool Isolation**: Each kiro-cli process is bound to a single user. Processes are never shared across users, preventing:
-- Cross-user session access
-- Process memory leakage
-- Cached state contamination
+```python
+# Any user can do this to access other users' data:
+import os
+for root, dirs, files in os.walk('/home/user/.kiro/sessions/cli'):
+    for file in files:
+        print(open(os.path.join(root, file)).read())
+```
 
-**Session Affinity**: The `(user_id, thread_id)` tuple ensures threads always return to the same process that holds their session lock, while enforcing per-user boundaries.
+**Current Status**: The bot implements session ID prefixing and process slot binding, but these only prevent **accidental** cross-user access through the application. A malicious user with tool access can trivially bypass these protections.
 
-**Workspace Isolation**: Each user gets isolated workspace directories with path validation to prevent traversal attacks:
+**For True Multi-User Security**: See [CONTAINER_ISOLATION_PROPOSAL.md](CONTAINER_ISOLATION_PROPOSAL.md) for a container-based architecture that provides kernel-level isolation.
+
+### Current Application-Layer Protections
+
+The following protections are implemented but **do not prevent determined attackers** with tool access:
+
+**Per-User Session IDs**: Session IDs prefixed with `user-{telegram_user_id}-` to prevent accidental cross-user access through the application API.
+
+**Process Pool Isolation**: kiro-cli processes are bound to single users to prevent memory leakage between users at the application level.
+
+**Session Affinity**: `(user_id, thread_id)` tuples ensure threads return to the correct process.
+
+**Workspace Isolation**: Directories organized by user, but filesystem permissions are not enforced:
 ```
 ./workspaces/
   ├── {telegram_user_id}/
@@ -138,39 +153,22 @@ KiroClaw implements defense-in-depth security for multi-user deployments. See [S
 
 ### Access Control
 
-**Fail-Closed by Default**: The `ALLOWED_TELEGRAM_IDS` environment variable must be explicitly set. Empty = nobody allowed.
+**Fail-Closed by Default**: `ALLOWED_TELEGRAM_IDS` must be explicitly set. Empty = nobody allowed.
 
-**User Allowlist**: Only Telegram user IDs in the allowlist can use the bot. All requests are validated before processing.
+**User Allowlist**: Only Telegram user IDs in the allowlist can use the bot. This is the primary security control for trusted-user deployments.
 
-### Session Security
+### Recommended Use Cases
 
-**Ownership Validation**: 
-- SessionStore validates session ownership on every `get_session()` call
-- `upsert_session()` rejects sessions with incorrect user prefixes
-- Prevents session hijacking and enumeration attacks
+✅ **Single user** - No security concerns
+✅ **Small trusted group** (family, close friends) - Low risk of malicious behavior
+❌ **Public/untrusted users** - Application-layer isolation is insufficient
 
-**Session ID Format**: `user-{telegram_user_id}-{kiro_generated_id}`
-- Example: `user-123456-sess_abc123`
-- User ID is extracted and validated on every operation
+### For Production Multi-User Deployments
 
-### Best Practices for Deployment
+See [CONTAINER_ISOLATION_PROPOSAL.md](CONTAINER_ISOLATION_PROPOSAL.md) for a complete architecture using:
+- Docker containers for per-user isolation
+- Kernel-level filesystem and process isolation
+- Resource limits (CPU, memory, disk)
+- True security guarantees even with tool access
 
-1. **Set ALLOWED_TELEGRAM_IDS**: Deploy with empty list first, get your ID, then add it
-2. **Use Environment Variables**: Never commit `.env` file to version control
-3. **Monitor Logs**: Review logs for unauthorized access attempts
-4. **Per-User Limits**: Consider setting `MAX_PROCESSES_PER_USER` in production
-5. **Workspace Permissions**: Ensure workspace directories have appropriate file permissions
-
-### Security Limitations
-
-**System-Level Isolation**: All users share the same system user account. For stronger isolation, consider:
-- Running in separate containers per user
-- Using filesystem quotas
-- Implementing rate limiting
-
-**Session Storage**: Sessions are stored in `~/.kiro/sessions/cli/` on the host. For production:
-- Use encrypted storage
-- Implement session expiration
-- Add audit logging
-
-See [SECURITY_PROPOSAL.md](SECURITY_PROPOSAL.md) for implementation details and future enhancements.
+This is the **only** way to safely run the bot with untrusted users who have coding tool access.
