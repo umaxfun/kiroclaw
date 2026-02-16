@@ -21,6 +21,7 @@ from tg_acp.bot_handlers import (
 from tg_acp.config import Config
 from tg_acp.process_pool import ProcessPool, ProcessSlot, QueuedRequest, SlotStatus
 from tg_acp.session_store import SessionRecord, SessionStore
+from tg_acp.session_security import wrap_session_id
 
 
 # ---------------------------------------------------------------------------
@@ -221,7 +222,9 @@ class TestNewSession:
 
         pool.acquire.assert_awaited_once()
         client.session_new.assert_awaited_once()
-        ctx.store.upsert_session.assert_called_once_with(1, 42, "new-session-id", "/tmp/ws/1/42")
+        # Expect wrapped session ID
+        expected_wrapped_id = wrap_session_id("new-session-id", 1)
+        ctx.store.upsert_session.assert_called_once_with(1, 42, expected_wrapped_id, "/tmp/ws/1/42")
         mock_writer.write_chunk.assert_awaited_once_with("Hi there")
         mock_writer.finalize.assert_awaited_once()
         pool.release_and_dequeue.assert_awaited_once()
@@ -236,8 +239,10 @@ class TestExistingSession:
     @patch("tg_acp.bot_handlers.StreamWriter")
     @patch("tg_acp.bot_handlers.create_workspace_dir", return_value="/tmp/ws/1/42")
     async def test_loads_existing_session(self, mock_cwd, mock_sw_cls):
+        # Use wrapped session ID
+        wrapped_id = wrap_session_id("existing-sid", 1)
         record = SessionRecord(
-            user_id=1, thread_id=42, session_id="existing-sid",
+            user_id=1, thread_id=42, session_id=wrapped_id,
             workspace_path="/tmp/ws/1/42", model="auto",
         )
         ctx, pool, slot, client = _make_ctx(existing_session=record)
@@ -252,6 +257,7 @@ class TestExistingSession:
         msg = _make_message(user_id=1, thread_id=42)
         await handle_message(msg)
 
+        # Expect unwrapped session ID to be passed to kiro-cli
         client.session_load.assert_awaited_once_with("existing-sid", cwd="/tmp/ws/1/42")
         client.session_new.assert_not_awaited()
         mock_writer.finalize.assert_awaited_once()
@@ -262,8 +268,10 @@ class TestExistingSession:
     @patch("tg_acp.bot_handlers.create_workspace_dir", return_value="/tmp/ws/1/42")
     async def test_session_load_failure_returns_early_no_data_loss(self, mock_cwd, mock_sw_cls):
         """If session/load fails, handler tells user to retry — no session_new, no data loss."""
+        # Use wrapped session ID
+        wrapped_id = wrap_session_id("stale-sid", 1)
         record = SessionRecord(
-            user_id=1, thread_id=42, session_id="stale-sid",
+            user_id=1, thread_id=42, session_id=wrapped_id,
             workspace_path="/tmp/ws/1/42", model="auto",
         )
         ctx, pool, slot, client = _make_ctx(existing_session=record)

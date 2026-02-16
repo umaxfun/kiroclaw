@@ -26,12 +26,17 @@ def _make_config(max_processes: int = 2) -> MagicMock:
     return config
 
 
-def _make_slot(slot_id: int, status: SlotStatus = SlotStatus.IDLE, thread_id: int | None = None) -> ProcessSlot:
+def _make_slot(
+    slot_id: int, 
+    status: SlotStatus = SlotStatus.IDLE, 
+    thread_id: int | None = None,
+    user_id: int | None = None,
+) -> ProcessSlot:
     client = MagicMock()
     client.is_alive.return_value = True
     return ProcessSlot(
         slot_id=slot_id, client=client, status=status,
-        last_used=0.0, session_id=None, thread_id=thread_id,
+        last_used=0.0, user_id=user_id, session_id=None, thread_id=thread_id,
     )
 
 
@@ -51,10 +56,10 @@ class TestAcquireCancelRace:
         pool._reaper_task = MagicMock()  # prevent real reaper
 
         # Manually set up 2 BUSY slots (pool at max)
-        slot0 = _make_slot(0, SlotStatus.BUSY, thread_id=42)
-        slot1 = _make_slot(1, SlotStatus.BUSY, thread_id=99)
+        slot0 = _make_slot(0, SlotStatus.BUSY, thread_id=42, user_id=1)
+        slot1 = _make_slot(1, SlotStatus.BUSY, thread_id=99, user_id=2)
         pool.slots = [slot0, slot1]
-        pool._session_affinity = {42: 0, 99: 1}
+        pool._session_affinity = {(1, 42): 0, (2, 99): 1}
 
         # Thread 42 is in-flight on slot 0
         cancel_event = pool.in_flight.track(42, slot0.slot_id)
