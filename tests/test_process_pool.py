@@ -128,10 +128,10 @@ class TestSessionAffinity:
         pool = ProcessPool(_make_config(max_processes=2))
         pool._reaper_task = MagicMock()
 
-        slot0 = _make_slot(0, SlotStatus.IDLE, thread_id=42)
-        slot1 = _make_slot(1, SlotStatus.IDLE, thread_id=99)
+        slot0 = _make_slot(0, SlotStatus.IDLE, thread_id=42, user_id=1)
+        slot1 = _make_slot(1, SlotStatus.IDLE, thread_id=99, user_id=2)
         pool.slots = [slot0, slot1]
-        pool._session_affinity = {42: 0, 99: 1}
+        pool._session_affinity = {(1, 42): 0, (2, 99): 1}
 
         result = await pool.acquire(42, user_id=1)
         assert result is slot0
@@ -143,10 +143,10 @@ class TestSessionAffinity:
         pool = ProcessPool(_make_config(max_processes=2))
         pool._reaper_task = MagicMock()
 
-        slot0 = _make_slot(0, SlotStatus.BUSY, thread_id=42)
-        slot1 = _make_slot(1, SlotStatus.IDLE, thread_id=99)
+        slot0 = _make_slot(0, SlotStatus.BUSY, thread_id=42, user_id=1)
+        slot1 = _make_slot(1, SlotStatus.IDLE, thread_id=99, user_id=2)
         pool.slots = [slot0, slot1]
-        pool._session_affinity = {42: 0, 99: 1}
+        pool._session_affinity = {(1, 42): 0, (2, 99): 1}
 
         result = await pool.acquire(42, user_id=1)
         assert result is None, (
@@ -168,10 +168,10 @@ class TestSessionAffinity:
         pool._reaper_task = MagicMock()
 
         # Slot 0 is BUSY serving thread B, but affinity says thread A → slot 0
-        slot0 = _make_slot(0, SlotStatus.BUSY, thread_id=99)  # currently serving B
-        slot1 = _make_slot(1, SlotStatus.IDLE, thread_id=None)
+        slot0 = _make_slot(0, SlotStatus.BUSY, thread_id=99, user_id=1)  # currently serving B
+        slot1 = _make_slot(1, SlotStatus.IDLE, thread_id=None, user_id=None)
         pool.slots = [slot0, slot1]
-        pool._session_affinity = {42: 0}  # thread A's session is on slot 0
+        pool._session_affinity = {(1, 42): 0}  # thread A's session is on slot 0
 
         result = await pool.acquire(42, user_id=1)
         assert result is None, (
@@ -186,15 +186,15 @@ class TestSessionAffinity:
         pool = ProcessPool(_make_config(max_processes=2))
         pool._reaper_task = MagicMock()
 
-        slot0 = _make_slot(0, SlotStatus.BUSY, thread_id=42)
-        slot1 = _make_slot(1, SlotStatus.IDLE, thread_id=99)
+        slot0 = _make_slot(0, SlotStatus.BUSY, thread_id=42, user_id=1)
+        slot1 = _make_slot(1, SlotStatus.IDLE, thread_id=99, user_id=None)
         pool.slots = [slot0, slot1]
 
         result = await pool.acquire(777, user_id=1)
         assert result is slot1
         assert slot1.status == SlotStatus.BUSY
         assert slot1.thread_id == 777
-        assert pool._session_affinity[777] == 1, "Affinity must be recorded on acquire"
+        assert pool._session_affinity[(1, 777)] == 1, "Affinity must be recorded on acquire"
 
     @pytest.mark.asyncio
     async def test_acquire_clears_stale_affinity_when_slot_reaped(self):
@@ -203,13 +203,13 @@ class TestSessionAffinity:
         pool._reaper_task = MagicMock()
 
         # Affinity says thread 42 → slot 5, but slot 5 doesn't exist
-        slot0 = _make_slot(0, SlotStatus.IDLE)
+        slot0 = _make_slot(0, SlotStatus.IDLE, user_id=None)
         pool.slots = [slot0]
-        pool._session_affinity = {42: 5}
+        pool._session_affinity = {(1, 42): 5}
 
         result = await pool.acquire(42, user_id=1)
         assert result is slot0, "Should grab any IDLE slot after clearing stale affinity"
-        assert pool._session_affinity[42] == 0, "New affinity should point to slot 0"
+        assert pool._session_affinity[(1, 42)] == 0, "New affinity should point to slot 0"
 
     @pytest.mark.asyncio
     async def test_release_and_dequeue_prefers_affinity_thread(self):
@@ -217,10 +217,10 @@ class TestSessionAffinity:
         pool = ProcessPool(_make_config(max_processes=1))
         pool._reaper_task = MagicMock()
 
-        slot0 = _make_slot(0, SlotStatus.BUSY, thread_id=99)
+        slot0 = _make_slot(0, SlotStatus.BUSY, thread_id=99, user_id=1)
         pool.slots = [slot0]
         # Thread 42 has affinity for slot 0
-        pool._session_affinity = {42: 0, 99: 0}
+        pool._session_affinity = {(1, 42): 0, (1, 99): 0}
 
         # Queue: thread 88 first (no affinity), then thread 42 (affinity for slot 0)
         pool.request_queue.enqueue(QueuedRequest(
@@ -240,23 +240,23 @@ class TestSessionAffinity:
 
     @pytest.mark.asyncio
     async def test_release_and_dequeue_falls_back_to_fifo(self):
-        """When no affinity match in queue, falls back to FIFO."""
+        """When no affinity match in queue, falls back to FIFO (same user only)."""
         pool = ProcessPool(_make_config(max_processes=1))
         pool._reaper_task = MagicMock()
 
-        slot0 = _make_slot(0, SlotStatus.BUSY, thread_id=42)
+        slot0 = _make_slot(0, SlotStatus.BUSY, thread_id=42, user_id=1)
         pool.slots = [slot0]
-        pool._session_affinity = {42: 0}
+        pool._session_affinity = {(1, 42): 0}
 
-        # Queue only has thread 99 (no affinity for slot 0)
+        # Queue only has thread 99 from same user (no affinity for slot 0, but same user)
         pool.request_queue.enqueue(QueuedRequest(
-            thread_id=99, user_id=2, message_text="msg99",
+            thread_id=99, user_id=1, message_text="msg99",
             files=[], chat_id=200, workspace_path="/tmp",
         ))
 
         next_req, handoff = await pool.release_and_dequeue(slot0, "sid-42", 42)
         assert next_req is not None
-        assert next_req.thread_id == 99, "Should fall back to FIFO"
+        assert next_req.thread_id == 99, "Should fall back to FIFO (same user)"
 
 
 class TestDequeueByThread:
