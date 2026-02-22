@@ -88,3 +88,73 @@ async def _send_access_denied(message: Message, user_id: int) -> None:
 | Denied user sends file | Rejection message, file not downloaded |
 | Empty allowlist | All users denied |
 | Config parsing | Comma-separated IDs parsed, whitespace handled, non-integer raises ValueError |
+
+
+---
+
+## Stale Lock Recovery Flow
+
+### session/load Error Path (handle_message_internal)
+
+```
+session/load fails with RuntimeError
+    |
+    v
+extract error message string
+    |
+    v
+regex match "Session is active in another process (PID {pid})"?
+    |
+   NO ──> existing behavior: log error, send "try again" to user, RETURN
+    |
+   YES
+    |
+    v
+extract pid (int)
+    |
+    v
+os.kill(pid, 0) — is process alive?
+    |
+   YES (no exception or PermissionError)
+    |   └──> live conflict: log error, send "try again" to user, RETURN
+    |
+   NO (OSError with ESRCH)
+    |
+    v
+log WARNING: stale lock detected
+    |
+    v
+store.delete_session(user_id, thread_id)
+    |
+    v
+session_id = await slot.client.session_new(cwd=workspace_path)
+    |
+    v
+store.upsert_session(user_id, thread_id, session_id, workspace_path)
+    |
+    v
+[continue normal prompt flow with new session_id]
+```
+
+### Implementation Approach
+
+The recovery logic lives entirely in `handle_message_internal`, inside the existing `except RuntimeError` block for `session/load`. No new components or methods needed — just a conditional branch in the error handler.
+
+A helper function `_try_recover_stale_session(error_msg: str) -> int | None` extracts the PID from the error message and checks liveness. Returns the stale PID if recovery is possible, `None` if not.
+
+### SessionStore.delete_session
+
+New method on C3 SessionStore:
+```python
+def delete_session(self, user_id: int, thread_id: int) -> None:
+    """Delete a session record. Used for stale lock recovery."""
+```
+
+### Test Strategy (FR-16)
+
+| Test | What it verifies |
+|------|-----------------|
+| Stale PID recovery | session/load fails with dead PID → session cleared, new session created, prompt succeeds |
+| Live PID conflict | session/load fails with live PID → error reported to user, no recovery |
+| Non-matching error | session/load fails with different error → existing behavior unchanged |
+| delete_session | SQLite record removed, subsequent get_session returns None |

@@ -47,6 +47,7 @@ def _make_config(max_processes: int = 2) -> Config:
         kiro_agent_name=AGENT_NAME,
         log_level="DEBUG",
         kiro_config_path="./kiro-config/",
+        allowed_telegram_ids=frozenset({200}),
     )
 
 

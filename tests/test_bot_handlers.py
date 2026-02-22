@@ -672,3 +672,166 @@ class TestAllowlistEmptyDeniesAll:
         text = msg.answer.call_args[0][0]
         assert "⛔" in text
         pool.acquire.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Tests: stale session lock recovery (FR-16)
+# ---------------------------------------------------------------------------
+
+class TestStaleLockRecovery:
+    """session/load fails with dead PID → session cleared, new session created."""
+
+    @pytest.mark.asyncio
+    @patch("tg_acp.bot_handlers.StreamWriter")
+    @patch("tg_acp.bot_handlers.create_workspace_dir", return_value="/tmp/ws/1/42")
+    @patch("tg_acp.bot_handlers._try_recover_stale_session", return_value=99999)
+    async def test_stale_pid_triggers_recovery(self, mock_recover, mock_cwd, mock_sw_cls):
+        record = SessionRecord(
+            user_id=1, thread_id=42, session_id="stale-sid",
+            workspace_path="/tmp/ws/1/42", model="auto",
+        )
+        ctx, pool, slot, client = _make_ctx(existing_session=record)
+        client.session_load.side_effect = RuntimeError(
+            "JSON-RPC error on session/load: [-32603] Internal error | "
+            "data: Failed to start session: Session is active in another process (PID 99999)"
+        )
+        client.session_new = AsyncMock(return_value="recovered-sid")
+        client.session_prompt = _fake_prompt_stream
+        mock_writer = MagicMock()
+        mock_writer.write_chunk = AsyncMock()
+        mock_writer.finalize = AsyncMock(return_value=[])
+        mock_writer.cancel = MagicMock()
+        mock_sw_cls.return_value = mock_writer
+        setup(ctx)
+
+        msg = _make_message(user_id=1, thread_id=42)
+        await handle_message(msg)
+
+        # Old session deleted, new one created
+        ctx.store.delete_session.assert_called_once_with(1, 42)
+        client.session_new.assert_awaited_once()
+        ctx.store.upsert_session.assert_called_once_with(1, 42, "recovered-sid", "/tmp/ws/1/42")
+        # Prompt still executed with new session
+        mock_writer.finalize.assert_awaited_once()
+
+
+class TestLivePidConflict:
+    """session/load fails with live PID → error to user, no recovery."""
+
+    @pytest.mark.asyncio
+    @patch("tg_acp.bot_handlers.StreamWriter")
+    @patch("tg_acp.bot_handlers.create_workspace_dir", return_value="/tmp/ws/1/42")
+    @patch("tg_acp.bot_handlers._try_recover_stale_session", return_value=None)
+    async def test_live_pid_reports_error(self, mock_recover, mock_cwd, mock_sw_cls):
+        record = SessionRecord(
+            user_id=1, thread_id=42, session_id="locked-sid",
+            workspace_path="/tmp/ws/1/42", model="auto",
+        )
+        ctx, pool, slot, client = _make_ctx(existing_session=record)
+        client.session_load.side_effect = RuntimeError("Session is active in another process (PID 12345)")
+        mock_writer = MagicMock()
+        mock_sw_cls.return_value = mock_writer
+        setup(ctx)
+
+        msg = _make_message(user_id=1, thread_id=42)
+        await handle_message(msg)
+
+        # No recovery — error sent to user
+        ctx.store.delete_session.assert_not_called()
+        client.session_new.assert_not_awaited()
+        ctx.bot.send_message.assert_awaited_once()
+        sent_text = ctx.bot.send_message.call_args[0][1]
+        assert "try again" in sent_text.lower()
+
+
+class TestNonMatchingSessionError:
+    """session/load fails with unrelated error → existing behavior unchanged."""
+
+    @pytest.mark.asyncio
+    @patch("tg_acp.bot_handlers.StreamWriter")
+    @patch("tg_acp.bot_handlers.create_workspace_dir", return_value="/tmp/ws/1/42")
+    async def test_unrelated_error_no_recovery(self, mock_cwd, mock_sw_cls):
+        record = SessionRecord(
+            user_id=1, thread_id=42, session_id="broken-sid",
+            workspace_path="/tmp/ws/1/42", model="auto",
+        )
+        ctx, pool, slot, client = _make_ctx(existing_session=record)
+        client.session_load.side_effect = RuntimeError("some other error")
+        mock_writer = MagicMock()
+        mock_sw_cls.return_value = mock_writer
+        setup(ctx)
+
+        msg = _make_message(user_id=1, thread_id=42)
+        await handle_message(msg)
+
+        # _try_recover_stale_session returns None for non-matching error
+        ctx.store.delete_session.assert_not_called()
+        client.session_new.assert_not_awaited()
+        ctx.bot.send_message.assert_awaited_once()
+        sent_text = ctx.bot.send_message.call_args[0][1]
+        assert "try again" in sent_text.lower()
+
+
+class TestRecoveryFailure:
+    """session_new fails after stale lock clear → user gets error, no crash."""
+
+    @pytest.mark.asyncio
+    @patch("tg_acp.bot_handlers.StreamWriter")
+    @patch("tg_acp.bot_handlers.create_workspace_dir", return_value="/tmp/ws/1/42")
+    @patch("tg_acp.bot_handlers._try_recover_stale_session", return_value=99999)
+    async def test_session_new_failure_after_recovery(self, mock_recover, mock_cwd, mock_sw_cls):
+        record = SessionRecord(
+            user_id=1, thread_id=42, session_id="stale-sid",
+            workspace_path="/tmp/ws/1/42", model="auto",
+        )
+        ctx, pool, slot, client = _make_ctx(existing_session=record)
+        client.session_load.side_effect = RuntimeError(
+            "Session is active in another process (PID 99999)"
+        )
+        client.session_new = AsyncMock(side_effect=RuntimeError("spawn failed"))
+        mock_writer = MagicMock()
+        mock_sw_cls.return_value = mock_writer
+        setup(ctx)
+
+        msg = _make_message(user_id=1, thread_id=42)
+        await handle_message(msg)
+
+        # Old session deleted, but new session creation failed
+        ctx.store.delete_session.assert_called_once_with(1, 42)
+        ctx.store.upsert_session.assert_not_called()
+        ctx.bot.send_message.assert_awaited_once()
+        sent_text = ctx.bot.send_message.call_args[0][1]
+        assert "recovering" in sent_text.lower()
+
+
+class TestTryRecoverStaleSession:
+    """Unit tests for _try_recover_stale_session helper."""
+
+    @patch("tg_acp.bot_handlers.os.kill", side_effect=OSError("No such process"))
+    def test_dead_pid_returns_pid(self, mock_kill):
+        from tg_acp.bot_handlers import _try_recover_stale_session
+        result = _try_recover_stale_session(
+            "Failed to start session: Session is active in another process (PID 99999)"
+        )
+        assert result == 99999
+        mock_kill.assert_called_once_with(99999, 0)
+
+    @patch("tg_acp.bot_handlers.os.kill")  # no exception = process alive
+    def test_live_pid_returns_none(self, mock_kill):
+        from tg_acp.bot_handlers import _try_recover_stale_session
+        result = _try_recover_stale_session(
+            "Failed to start session: Session is active in another process (PID 12345)"
+        )
+        assert result is None
+
+    def test_non_matching_error_returns_none(self):
+        from tg_acp.bot_handlers import _try_recover_stale_session
+        assert _try_recover_stale_session("some other error") is None
+
+    @patch("tg_acp.bot_handlers.os.kill", side_effect=PermissionError("not permitted"))
+    def test_permission_error_treated_as_alive(self, mock_kill):
+        from tg_acp.bot_handlers import _try_recover_stale_session
+        result = _try_recover_stale_session(
+            "Session is active in another process (PID 42)"
+        )
+        assert result is None

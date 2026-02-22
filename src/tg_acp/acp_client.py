@@ -98,8 +98,10 @@ class ACPClient:
         result = await future
         if "error" in result and result["error"] is not None:
             err = result["error"]
+            data = err.get("data", "")
+            data_suffix = f" | data: {data}" if data else ""
             raise RuntimeError(
-                f"JSON-RPC error on {method}: [{err.get('code')}] {err.get('message')}"
+                f"JSON-RPC error on {method}: [{err.get('code')}] {err.get('message')}{data_suffix}"
             )
         return result.get("result", {})
 
@@ -158,6 +160,7 @@ class ACPClient:
         if cwd is not None:
             params["cwd"] = cwd
 
+        logger.debug("session/load params: sessionId=%s cwd=%s", session_id, cwd)
         await self._send_request("session/load", params)
         self._drain_notifications("after session/load")
         logger.info("Loaded session %s", session_id)
@@ -335,6 +338,13 @@ class ACPClient:
                         if method == "session/request_permission":
                             params = msg.get("params", {})
                             options = params.get("options", [])
+                            # Extract tool identity from permission request
+                            tool_call = params.get("toolCall", {})
+                            tool_name = tool_call.get("title", "?")
+                            logger.debug(
+                                "Permission request tool=%s toolCallId=%s",
+                                tool_name, tool_call.get("toolCallId", "?"),
+                            )
                             # Pick the allow_once option from the provided options
                             allow_option = next(
                                 (o for o in options if o.get("kind") == "allow_once"),
@@ -348,8 +358,8 @@ class ACPClient:
                                 )
                             option_id = allow_option["optionId"] if allow_option else "allow-once"
                             logger.debug(
-                                "Auto-granting permission id=%s optionId=%s",
-                                rid, option_id,
+                                "Auto-granting permission id=%s optionId=%s tool=%s",
+                                rid, option_id, tool_name,
                             )
                             await self._send({
                                 "jsonrpc": "2.0",
@@ -386,10 +396,23 @@ class ACPClient:
                     # Notification — queue for consumers
                     await self._notification_queue.put(msg)
                     method = msg.get("method", "?")
-                    update_type = (
-                        msg.get("params", {}).get("update", {}).get("sessionUpdate", "")
-                    )
-                    logger.debug("<- notification %s (%s)", method, update_type)
+                    update = msg.get("params", {}).get("update", {})
+                    update_type = update.get("sessionUpdate", "")
+
+                    # Surface tool info for tool_call / tool_call_update so
+                    # operators can see what the agent is actually doing.
+                    extra = ""
+                    if update_type in ("tool_call", "tool_call_update"):
+                        title = update.get("title", "")
+                        kind = update.get("kind", "")
+                        status = update.get("status", "")
+                        if title:
+                            extra = f" title={title!r}"
+                        if kind:
+                            extra += f" kind={kind}"
+                        if status:
+                            extra += f" status={status}"
+                    logger.debug("<- notification %s (%s%s)", method, update_type, extra)
         except asyncio.CancelledError:
             pass
         finally:

@@ -20,3 +20,14 @@
 - O(1) membership check directly on `frozenset`
 - Exposed via a method: `Config.is_user_allowed(user_id: int) -> bool` — returns `user_id in self.allowed_telegram_ids`
 - No derived field needed — `frozenset` is the canonical store and is compatible with `frozen=True` dataclass
+
+
+---
+
+## SessionStore Extension
+
+### New Method: `delete_session`
+
+| Method | Params | Returns | Description |
+|--------|--------|---------|-------------|
+| `delete_session` | `user_id: int, thread_id: int` | `None` | Delete session record from SQLite. Used for stale lock recovery (BR-07). |

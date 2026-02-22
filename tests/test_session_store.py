@@ -105,3 +105,16 @@ class TestWorkspaceDir:
         path1 = create_workspace_dir(base, 1, 1)
         path2 = create_workspace_dir(base, 1, 1)
         assert path1 == path2
+
+
+class TestDeleteSession:
+    def test_delete_removes_record(self, store):
+        """delete_session removes the record, get_session returns None."""
+        store.upsert_session(1, 1, "sess-1", "/ws/1/1")
+        assert store.get_session(1, 1) is not None
+        store.delete_session(1, 1)
+        assert store.get_session(1, 1) is None
+
+    def test_delete_nonexistent_is_noop(self, store):
+        """delete_session on missing key doesn't raise."""
+        store.delete_session(999, 999)  # should not raise

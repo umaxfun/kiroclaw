@@ -127,6 +127,13 @@ All architectural decisions, protocol details, and tech stack choices are docume
 - README covers: project description, prerequisites, installation, configuration (.env variables), kiro-config setup, running the bot, bot commands, architecture overview
 - README is a release artifact — written for someone deploying the bot on a new machine
 
+### FR-16: Stale Session Lock Recovery
+- When `session/load` fails with "Session is active in another process (PID X)", the bot attempts recovery instead of giving up
+- Recovery: check if PID X is still alive; if dead (stale lock), clear the session from SQLite and create a new session on the same slot
+- If PID X is alive (genuine conflict — should not happen in normal operation), log an error and report failure to the user as before
+- Conversation history is lost on recovery (new session replaces the locked one) — this is acceptable because the alternative is a permanently stuck thread
+- Log a warning on every recovery so the operator knows it happened
+
 ---
 
 ## Non-Functional Requirements

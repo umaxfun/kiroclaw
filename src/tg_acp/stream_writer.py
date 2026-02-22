@@ -216,10 +216,33 @@ class StreamWriter:
         self._buffer = ""
         self._last_draft_time = 0.0
         self._cancelled = False
+        self._tool_status = ""  # current tool activity shown in drafts
+        self._tool_log: list[str] = []  # completed tool calls for final summary
 
     @property
     def buffer(self) -> str:
         return self._buffer
+
+    def set_tool_status(self, status: str) -> None:
+        """Set the current tool activity line shown in drafts (empty to clear)."""
+        self._tool_status = status
+
+    def log_tool_call(self, title: str) -> None:
+        """Record a completed tool call for the final summary."""
+        if title and title not in self._tool_log:
+            self._tool_log.append(title)
+
+    def _draft_text(self) -> str:
+        """Build the text shown in sendMessageDraft: buffer + tool status."""
+        draft = _sliding_window(self._buffer) if self._buffer else ""
+        if self._tool_status:
+            suffix = f"\n\n{self._tool_status}"
+            # Trim draft to fit status within window
+            max_draft = WINDOW_SIZE - len(suffix)
+            if max_draft > 0 and len(draft) > max_draft:
+                draft = "…\n" + draft[-(max_draft - 2):]
+            draft = (draft + suffix) if draft else self._tool_status
+        return draft or "…"
 
     async def write_chunk(self, text: str) -> None:
         """Append text and send a draft update (throttled, best-effort)."""
@@ -227,7 +250,7 @@ class StreamWriter:
             return
 
         self._buffer += text
-        draft_text = _sliding_window(self._buffer)
+        draft_text = self._draft_text()
 
         now = time.monotonic()
         if now - self._last_draft_time < DRAFT_THROTTLE_S:
@@ -249,6 +272,30 @@ class StreamWriter:
                 logger.warning("sendMessageDraft failed (non-fatal)", exc_info=True)
 
         self._last_draft_time = now
+
+    async def send_tool_draft(self) -> None:
+        """Send a draft showing current tool status. Bypasses throttle for state changes."""
+        if self._cancelled:
+            return
+        draft_text = self._draft_text()
+        if not draft_text or draft_text == "…":
+            return
+
+        try:
+            await self._bot.send_message_draft(
+                chat_id=self._chat_id,
+                message_thread_id=self._thread_id,
+                draft_id=self._draft_id,
+                text=draft_text,
+            )
+        except Exception as exc:
+            retry_after = getattr(exc, "retry_after", None)
+            if retry_after:
+                self._last_draft_time = time.monotonic() + retry_after
+            else:
+                logger.warning("sendMessageDraft failed (non-fatal)", exc_info=True)
+
+        self._last_draft_time = time.monotonic()
 
     async def finalize(self) -> list[tuple[str, str]]:
         """Send the final message(s) with Markdown→HTML conversion.
@@ -281,6 +328,11 @@ class StreamWriter:
 
         # Strip all <send_file> tags from buffer
         cleaned = _SEND_FILE_RE.sub("", self._buffer).strip()
+
+        # Prepend tool call summary if any tools were used
+        if self._tool_log:
+            summary_lines = " → ".join(self._tool_log)
+            cleaned = f"🔧 {summary_lines}\n\n{cleaned}"
 
         # If buffer is only <send_file> tags, skip sendMessage (BR-15 #4)
         if not cleaned:

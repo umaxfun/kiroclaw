@@ -166,6 +166,7 @@
 3. Unauthorized users get a friendly message: their Telegram ID + instruction to contact admin
 4. `/start` still works for unauthorized users but notes access is restricted
 5. Comprehensive `README.md` at workspace root
+6. Stale session lock recovery — when `session/load` fails because a dead process holds the lock, clear the session and create a new one instead of permanently failing
 
 **Project artifacts created**:
 - `README.md` — project documentation for deployment
@@ -174,12 +175,15 @@
 - C7 Config gains `allowed_telegram_ids: list[int]` parsed from comma-separated env var
 - C6 Bot Handlers gains allowlist check as first gate in all handlers (text, file, audio, commands)
 - C6 `/start` handler shows restricted-access variant for unauthorized users
+- C6 `handle_message_internal` gains stale lock recovery in the `session/load` error path
 
 **Test scope**:
 - Allowlist enforcement: allowed user gets normal response, denied user gets rejection with their ID
 - `/start` for unauthorized user: shows welcome but notes restricted access
 - Empty allowlist: all users denied (fail-closed)
 - Config parsing: comma-separated IDs parsed correctly, whitespace handled
+- Stale lock recovery: session/load fails with stale PID → session cleared, new session created, user gets response
+- Live PID conflict: session/load fails with live PID → error reported to user (no recovery)
 
 ---
 

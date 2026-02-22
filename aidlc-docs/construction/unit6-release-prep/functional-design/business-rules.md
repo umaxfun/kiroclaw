@@ -66,3 +66,54 @@ README.md is a release artifact. It must cover:
 6. Running the bot (uv run main.py)
 7. Bot commands (/start, /model)
 8. Architecture overview (brief — components, how they interact)
+
+
+---
+
+## BR-06: Stale Session Lock Detection
+
+When `session/load` fails with error data matching `Session is active in another process (PID {pid})`:
+
+### Rule
+```
+IF session/load error contains "Session is active in another process (PID {pid})":
+    extract pid from error message
+    IF pid is NOT alive (os.kill(pid, 0) raises OSError):
+        → stale lock — execute recovery (BR-07)
+    ELSE:
+        → live conflict — log error, report failure to user (existing behavior)
+```
+
+### PID Liveness Check
+- Use `os.kill(pid, 0)` — sends no signal, just checks if process exists
+- `OSError` (errno ESRCH) → process is dead → stale lock
+- No exception → process is alive → genuine conflict
+- `PermissionError` → process exists but owned by another user → treat as alive (genuine conflict)
+
+## BR-07: Stale Lock Recovery
+
+When a stale lock is detected (BR-06):
+
+### Rule
+```
+1. Log WARNING: "Stale session lock detected for {session_id} (dead PID {pid}) — clearing and creating new session"
+2. Delete the session record from SQLite: store.delete_session(user_id, thread_id)
+3. Create a new session on the same slot: session_new(cwd=workspace_path)
+4. Upsert the new session into SQLite
+5. Continue normal message processing with the new session
+```
+
+### Consequences
+- Conversation history is lost (new session replaces the locked one)
+- This is acceptable: the alternative is a permanently stuck thread that never recovers
+- The warning log ensures the operator knows recovery happened
+
+## BR-08: Error Message Parsing
+
+The kiro-cli error data format is:
+```
+Failed to start session: Session is active in another process (PID {pid})
+```
+
+- Parse with regex: `r"Session is active in another process \(PID (\d+)\)"`
+- If the error doesn't match this pattern, fall through to existing error handling (no recovery attempt)

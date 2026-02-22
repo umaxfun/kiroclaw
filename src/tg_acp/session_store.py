@@ -91,6 +91,14 @@ class SessionStore:
             return "auto"
         return row["model"]
 
+    def delete_session(self, user_id: int, thread_id: int) -> None:
+        """Delete session record. Used for stale lock recovery (BR-07)."""
+        self._conn.execute(
+            "DELETE FROM sessions WHERE user_id = ? AND thread_id = ?",
+            (user_id, thread_id),
+        )
+        self._conn.commit()
+
     def close(self) -> None:
         """Close the SQLite connection."""
         self._conn.close()

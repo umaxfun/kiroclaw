@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import re
 from pathlib import Path
 
 from aiogram import Bot, Router
@@ -81,6 +83,33 @@ async def _send_access_denied(message: Message, user_id: int) -> None:
         f"Your Telegram ID: {user_id}\n\n"
         f"To get access, ask the administrator to add your ID to the allowed list."
     )
+
+
+_STALE_PID_RE = re.compile(r"Session is active in another process \(PID (\d+)\)")
+
+
+def _try_recover_stale_session(error_msg: str) -> int | None:
+    """Extract PID from session/load error and check if it's dead (stale lock).
+
+    Returns the stale PID if recovery is possible, None otherwise.
+    """
+    match = _STALE_PID_RE.search(error_msg)
+    if match is None:
+        return None
+
+    pid = int(match.group(1))
+    # TOCTOU: PID could theoretically be recycled between this check and
+    # session_new, but the window is sub-millisecond — acceptable risk.
+    try:
+        os.kill(pid, 0)  # signal 0 = check existence, don't actually signal
+    except PermissionError:
+        # Process exists but owned by another user — genuine conflict
+        return None
+    except OSError:
+        # Process is dead — stale lock
+        return pid
+    # Process is alive — genuine conflict
+    return None
 
 
 @router.message(CommandStart())
@@ -316,21 +345,48 @@ async def handle_message_internal(
             session_id = record.session_id
             try:
                 await slot.client.session_load(session_id, cwd=workspace_path)
-            except RuntimeError:
-                logger.error(
-                    "session/load failed for %s on slot %s — refusing to create "
-                    "new session (would destroy conversation history)",
-                    session_id, slot.slot_id, exc_info=True,
-                )
-                try:
-                    await bot.send_message(
-                        chat_id,
-                        "Session is temporarily busy. Please try again in a moment.",
-                        message_thread_id=message_thread_id,
+            except RuntimeError as exc:
+                stale_pid = _try_recover_stale_session(str(exc))
+                if stale_pid is not None:
+                    # BR-07: stale lock recovery — dead process holds the lock
+                    logger.warning(
+                        "Stale session lock detected for %s (dead PID %d) — "
+                        "clearing and creating new session",
+                        session_id, stale_pid,
                     )
-                except Exception:
-                    logger.warning("Failed to send session-busy notification")
-                return
+                    ctx.store.delete_session(user_id, thread_id)
+                    try:
+                        session_id = await slot.client.session_new(cwd=workspace_path)
+                        ctx.store.upsert_session(user_id, thread_id, session_id, workspace_path)
+                    except Exception:
+                        logger.exception(
+                            "Recovery failed after stale lock clear for thread=%s",
+                            thread_id,
+                        )
+                        try:
+                            await bot.send_message(
+                                chat_id,
+                                "Something went wrong recovering your session. Please try again.",
+                                message_thread_id=message_thread_id,
+                            )
+                        except Exception:
+                            logger.warning("Failed to send recovery-error notification")
+                        return
+                else:
+                    logger.error(
+                        "session/load failed for %s on slot %s — refusing to create "
+                        "new session (would destroy conversation history)",
+                        session_id, slot.slot_id, exc_info=True,
+                    )
+                    try:
+                        await bot.send_message(
+                            chat_id,
+                            "Session is temporarily busy. Please try again in a moment.",
+                            message_thread_id=message_thread_id,
+                        )
+                    except Exception:
+                        logger.warning("Failed to send session-busy notification")
+                    return
 
         # Build prompt content
         if file_paths:
@@ -360,6 +416,17 @@ async def handle_message_internal(
                     chunk_content = update.get("content", {})
                     if chunk_content.get("type") == "text":
                         await writer.write_chunk(chunk_content["text"])
+                elif update_type == "tool_call":
+                    title = update.get("title", "")
+                    if title:
+                        writer.set_tool_status(f"🔧 {title}…")
+                        await writer.send_tool_draft()
+                elif update_type == "tool_call_update":
+                    title = update.get("title", "")
+                    status = update.get("status", "")
+                    if status == "completed" and title:
+                        writer.log_tool_call(title)
+                        writer.set_tool_status("")
                 elif update_type == TURN_END:
                     logger.info(
                         "[thread=%s slot=%s] TURN_END — finalizing (buffer=%d chars)",

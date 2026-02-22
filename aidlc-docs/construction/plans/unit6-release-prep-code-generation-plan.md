@@ -35,3 +35,25 @@
 
 ### Step 5: Code summary
 - [x] Create `aidlc-docs/construction/unit6-release-prep/code/code-summary.md`
+
+
+---
+
+## FR-16: Stale Session Lock Recovery — Steps
+
+### Step 6: Add SessionStore.delete_session
+- [x] Add `delete_session(user_id, thread_id)` method to SessionStore
+- [x] File: `src/tg_acp/session_store.py` (modify)
+
+### Step 7: Add stale lock recovery to bot_handlers
+- [x] Add `_try_recover_stale_session(error_msg: str) -> int | None` helper
+- [x] Modify `handle_message_internal` session/load error path: detect stale PID, clear session, create new
+- [x] File: `src/tg_acp/bot_handlers.py` (modify)
+
+### Step 8: Add tests for stale lock recovery
+- [x] SessionStore: delete_session removes record
+- [x] Bot handlers: stale PID → recovery (new session created), live PID → error to user, non-matching error → existing behavior
+- [x] Files: `tests/test_session_store.py` (modify), `tests/test_bot_handlers.py` (modify)
+
+### Step 9: Update code summary
+- [x] Update `aidlc-docs/construction/unit6-release-prep/code/code-summary.md`

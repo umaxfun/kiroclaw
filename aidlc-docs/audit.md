@@ -1459,3 +1459,51 @@ Also verified: bot in BotContext is necessary because handle_queued_request need
 **Context**: CONSTRUCTION - Code Generation Unit 6 COMPLETE
 
 ---
+
+## Unit 6 Scope Extension — FR-16 Stale Session Lock Recovery
+**Timestamp**: 2026-02-18T16:45:00Z
+**User Input**: "Yeah, let's try to detect stale locks. Let's add it as part of unit 6. And starting from the requirements and all the way ahead."
+**AI Response**: Extended Unit 6 scope with FR-16 (Stale Session Lock Recovery). Updated requirements.md, unit-of-work.md, unit-of-work-story-map.md. Proceeding through Functional Design → Code Generation for the new requirement.
+**Context**: CONSTRUCTION - Unit 6 scope extension, re-entering Functional Design for FR-16
+
+---
+
+## Functional Design — Unit 6 FR-16: Artifacts Created
+**Timestamp**: 2026-02-18T16:46:00Z
+**AI Response**: No questions needed — the error message format and recovery behavior are clear from the live debug session. Creating functional design artifacts for stale lock recovery.
+**Context**: CONSTRUCTION - Functional Design Unit 6 (FR-16 extension)
+
+---
+
+## Functional Design — Unit 6 FR-16: Approved
+**Timestamp**: 2026-02-18T16:50:00Z
+**User Input**: "approve"
+**AI Response**: Functional design approved. Proceeding to Code Generation for FR-16.
+**Context**: CONSTRUCTION - Functional Design Unit 6 FR-16 (Approved)
+
+---
+
+## Code Generation — Unit 6 FR-16: Plan Created and Approved (inline)
+**Timestamp**: 2026-02-18T16:51:00Z
+**AI Response**: Creating code generation plan for FR-16 and executing immediately per user's "all the way ahead" directive. Steps: 1) SessionStore.delete_session, 2) _try_recover_stale_session helper + recovery logic in handle_message_internal, 3) Tests, 4) Code summary update.
+**Context**: CONSTRUCTION - Code Generation Unit 6 FR-16
+
+---
+
+## Code Generation — Unit 6 FR-16: Generation Complete
+**Timestamp**: 2026-02-18T16:55:00Z
+**AI Response**: Completed all 4 steps for FR-16:
+
+1. ✅ `SessionStore.delete_session()` added
+2. ✅ `_try_recover_stale_session()` helper + recovery logic in `handle_message_internal`
+3. ✅ Tests: 6 new tests (2 session store + 4 bot handlers), 74/74 pass
+4. ✅ Code summary updated
+
+Also fixed during this session:
+- `_send_request` now includes `data` field from JSON-RPC errors (enabled the debug that found the stale lock issue)
+- `acquire()` step 1b now cancels in-flight when affinity slot busy (fixes duplicate response bug)
+- `handle_message` content check moved before allowlist gate (fixes double rejection on service messages)
+
+**Context**: CONSTRUCTION - Code Generation Unit 6 FR-16 COMPLETE
+
+---
